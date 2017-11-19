@@ -30,45 +30,47 @@ WrappingPathEntity.prototype.update = function(game) {
 WrappingPathEntity.prototype.draw = function(ctx) {
 	PathEntity.prototype.draw.call(this, ctx);
 
-	// console.log('debug: ', ctx.canvas.width, ctx.canvas.height);
-	var store_px = this.px;
-	var store_py = this.py;
+	if (this.visible) {
+		// console.log('debug: ', ctx.canvas.width, ctx.canvas.height);
+		var store_px = this.px;
+		var store_py = this.py;
 
-	var wrapped_px;
-	if (this.px - this.width / 2 < 0) {
-		wrapped_px = this.px + ctx.canvas.width;
-	} else if (this.px + this.width / 2 >= ctx.canvas.width) {
-		wrapped_px = this.px - ctx.canvas.width;
-	} else {
-		wrapped_px = this.px;
-	}
+		var wrapped_px;
+		if (this.px - this.width / 2 < 0) {
+			wrapped_px = this.px + ctx.canvas.width;
+		} else if (this.px + this.width / 2 >= ctx.canvas.width) {
+			wrapped_px = this.px - ctx.canvas.width;
+		} else {
+			wrapped_px = this.px;
+		}
 
-	var wrapped_py;
-	if (this.py - this.height / 2 < 0) {
-		wrapped_py = this.py + ctx.canvas.height;
-	} else if (this.py + this.height / 2 >= ctx.canvas.height) {
-		wrapped_py = this.py - ctx.canvas.height;
-	} else {
-		wrapped_py = this.py;
-	}
+		var wrapped_py;
+		if (this.py - this.height / 2 < 0) {
+			wrapped_py = this.py + ctx.canvas.height;
+		} else if (this.py + this.height / 2 >= ctx.canvas.height) {
+			wrapped_py = this.py - ctx.canvas.height;
+		} else {
+			wrapped_py = this.py;
+		}
 
-	if (wrapped_px !== this.px) {
-		this.px = wrapped_px;
-		PathEntity.prototype.draw.call(this, ctx);
-		this.px = store_px;
-	}
+		if (wrapped_px !== this.px) {
+			this.px = wrapped_px;
+			PathEntity.prototype.draw.call(this, ctx);
+			this.px = store_px;
+		}
 
-	if (wrapped_py !== this.py) {
-		this.py = wrapped_py;
-		PathEntity.prototype.draw.call(this, ctx);
-		this.py = store_py;
-	}
-	if (wrapped_px !== this.px && wrapped_py !== this.py) {
-		this.px = wrapped_px;
-		this.py = wrapped_py;
-		PathEntity.prototype.draw.call(this, ctx);
-		this.px = store_px;
-		this.py = store_py;
+		if (wrapped_py !== this.py) {
+			this.py = wrapped_py;
+			PathEntity.prototype.draw.call(this, ctx);
+			this.py = store_py;
+		}
+		if (wrapped_px !== this.px && wrapped_py !== this.py) {
+			this.px = wrapped_px;
+			this.py = wrapped_py;
+			PathEntity.prototype.draw.call(this, ctx);
+			this.px = store_px;
+			this.py = store_py;
+		}
 	}
 };
 
@@ -151,6 +153,11 @@ function PlayerShip(game, px, py, path) {
 	this.sy = 0;
 	this.angle_granularity = 5;
 	this.fire_timer = 0;
+	this.reload_timer = 60;
+
+	this.last_space_input = false;
+	this.missile_max = 4;
+	this.missile_count = this.missile_max;
 }
 PlayerShip.prototype = Object.create(WrappingCollidingEntity.prototype);
 PlayerShip.prototype.collision_radius = 8;
@@ -221,25 +228,38 @@ PlayerShip.prototype.update = function(game) {
 	this.px += this.sx;
 	this.py += this.sy;
 
+
+	if (this.missile_count < this.missile_max) {
+		if (this.reload_timer) {
+			this.reload_timer--;
+		} else {
+			this.missile_count++;
+			this.reload_timer = 60;
+		}
+	}
+
 	if (this.fire_timer) {
 		this.fire_timer--;
 	} else {
-		if (game.keystate[' ']) {
+		if (game.keystate[' '] && !this.last_space_input && this.missile_count > 0) {
 			this.fire(game);
-			this.fire_timer = 30;
+			this.missile_count--;
+			this.fire_timer = 5;
 		}
 	}
+
+	this.last_space_input = game.keystate[' '];
 
 	WrappingCollidingEntity.prototype.update.call(this, game);
 };
 // Asteroid.prototype.collision_radius = 32;
 PlayerShip.prototype.fire = function(game) {
 	var offset = point_offset(this.angle, this.width / 2);
-	var speed = point_offset(this.angle, 3);
+	var speed = point_offset(this.angle, 8);
 
 	game.entities_to_add.push(new PlayerMissile(game, offset.px + this.px, offset.py + this.py,
 			[{
-				timeout: 360,
+				timeout: 90,
 				sx: speed.px + this.sx,
 				sy: speed.py + this.sy,
 				angle: this.angle,
@@ -278,6 +298,73 @@ PlayerMissile.prototype.hit_asteroid = function(game, other) {
 };
 
 
+function UIP9Box(game, px, py, width, height, sizex, sizey, image) {
+	ScreenEntity.call(this, game, px, py, width, height, image);
+	this.sizex = sizex;
+	this.sizey = sizey;
+	this.angle_granularity = 1;
+
+	this.image = this.render();
+	this.width = this.image.width;
+	this.height = this.image.height;
+}
+UIP9Box.prototype = Object.create(ScreenEntity.prototype);
+UIP9Box.prototype.render = function() {
+	var buffer_canvas = document.createElement('canvas');
+	buffer_canvas.width = this.width * this.sizex;
+	buffer_canvas.height = this.height * this.sizey;
+
+	var buffer_context = buffer_canvas.getContext('2d');
+
+	var frame_width = this.image.width / 3;
+	var frame_height = this.image.height / 3;
+	for (var x = 0; x < this.sizex; x++) {
+		for (var y = 0; y < this.sizey; y++) {
+			var framex, framey;
+			if (x === 0) {
+				framex = 0;
+			} else if ( x < this.sizex - 1) {
+				framex = 1;
+			} else {
+				framex = 2;
+			}
+			if (y === 0) {
+				framey = 0;
+			} else if ( y < this.sizey - 1) {
+				framey = 1;
+			} else {
+				framey = 2;
+			}
+			buffer_context.drawImage(this.image,
+				framex * frame_width, framey * frame_height, frame_width, frame_height,
+				x * this.width, y * this.height, this.width, this.height);
+		}
+	}
+
+	return buffer_canvas;
+};
+
+function UIMissileDisplay(game, px, py, bucket) {
+	UIP9Box.call(this, game, px, py, 12, 8, 8, 4, game.images.p9_green_ui);
+	this.bucket = bucket;
+
+	for (var i = 0; i < bucket.missile_max; i++) {
+		var missile = new ScreenEntity(game, i * 12 - 12 * bucket.missile_max / 2 + 6, 0, 16, 16, game.images.ui_missile);
+		missile.angle = -60;
+		this.sub_entities.push(missile);
+	}
+}
+UIMissileDisplay.prototype = Object.create(UIP9Box.prototype);
+UIMissileDisplay.prototype.update = function(game) {
+	var missile_count = this.bucket.missile_count;
+	var missile_max = this.bucket.missile_max;
+	for (var i = 0; i < missile_max; i++) {
+		this.sub_entities[i].visible = i < missile_count;
+	}
+};
+
+
+
 
 
 function main () {
@@ -294,6 +381,8 @@ function main () {
 		asteroid_64: "asteroid_64.png",
 
 		particle_effect_generic: "particle_effect_generic.png",
+		p9_green_ui: "p9_green_ui.png",
+		ui_missile: "ui_missile.png",
 	};
 
 	load_all_images(images, function () {
@@ -310,19 +399,16 @@ function main () {
 		// game.entities.push(game.creep_system);
 		// game.entities.push(game.building_system);
 		// // game.entities.push(new XHive(game, 16 * 5 + 48 / 2, 16 * 5 + 48 / 2));
-		game.entities.push(new PlayerShip(game, 300, 300));
+		var player_ship = new PlayerShip(game, 300, 300);
+		game.entities.push(player_ship);
 		game.entities.push(new Asteroid(game, 0, 460,
 			[ { angle: Math.random() * 360, speed: 0.25 + Math.random() * 0.25, }, ]));
 		game.entities.push(new Asteroid(game, 0, 460,
 			[ { angle: Math.random() * 360, speed: 0.25 + Math.random() * 0.25, }, ]));
 		game.entities.push(new Asteroid(game, 0, 460,
 			[ { angle: Math.random() * 360, speed: 0.25 + Math.random() * 0.25, }, ]));
-		// game.entities.push(new XFlyingSpore(game, 0, 0, 32, [
-		// 	{ px: 280, py: 140, speed: 2, },
-		// 	{ timeout: 0, call_system: [ {system: 'creep_system', method: 'spill_creep', args: [[Math.floor(280/16), Math.floor(140/16)], 3.5] } ] },
-		// 	{ timeout: 0, call_system: [ {system: 'building_system', method: 'build_building',
-		// 		args: [XSporePool, [Math.floor(280/16) - 1, Math.floor(140/16) - 1]] } ] },
-		// ]));
+		game.entities.push(new UIMissileDisplay(game, 8 * 12 / 2 + 16, 480 - 4 * 8 / 2 - 16, player_ship));
+		// game.entities.push(new UIP9Box(game, 8 * 12 / 2 + 16, 480 - 4 * 8 / 2 - 16, 12, 8, 8, 4, game.images.p9_green_ui));
 
 		game.particle_systems.fire_particles = new ParticleEffectSystem(game, {
 			particle_image: game.images.particle_effect_generic,
