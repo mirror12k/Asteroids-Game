@@ -376,7 +376,7 @@ PlayerShip.prototype.update = function(game) {
 	}
 
 	if (game.keystate.W) {
-		var offset = point_offset(this.angle, 0.15);
+		var offset = point_offset(this.angle, 0.10);
 		this.sx += offset.px;
 		this.sy += offset.py;
 	}
@@ -570,19 +570,44 @@ UIWarningSign.prototype.update = function(game) {
 	this.visible = this.blink > 20;
 };
 
-function NPCDirectorEntity(game) {
+function NPCDirectorEntity(game, waves) {
 	Entity.call(this, game);
-	this.spawn_timer = 60;
+	this.waves = waves;
+	this.wave_index = 0;
+	this.start_next_wave(game);
 }
 NPCDirectorEntity.prototype = Object.create(Entity.prototype);
 NPCDirectorEntity.prototype.update = function(game) {
 	Entity.prototype.update.call(this, game);
 
-	this.spawn_timer--;
 	if (this.spawn_timer === 0) {
-		this.spawn_enemy(game);
-		this.spawn_timer = 60;
+		var count_asteroids = game.query_entities(Asteroid).length;
+		if (count_asteroids < this.max_spawned && this.wave_spawn_count > 0) {
+			this.wave_spawn_count--;
+			this.spawn_enemy(game);
+			this.spawn_timer = 60;
+		} else if (count_asteroids === 0 && this.wave_spawn_count === 0) {
+			console.log('wave cleared');
+			this.start_next_wave(game);
+		}
+	} else {
+		this.spawn_timer--;
 	}
+};
+NPCDirectorEntity.prototype.start_next_wave = function(game) {
+	if (this.wave_index < this.waves.length) {
+		this.start_wave(game, this.waves[this.wave_index]);
+		this.wave_index++;
+	} else {
+		this.spawn_timer = -1;
+		console.log("all waves completed!");
+	}
+};
+NPCDirectorEntity.prototype.start_wave = function(game, wave) {
+	this.spawn_interval = wave.spawn_interval || 60;
+	this.spawn_timer = this.spawn_interval;
+	this.max_spawned = wave.max_spawned || 4;
+	this.wave_spawn_count = wave.wave_spawn_count || 10;
 };
 NPCDirectorEntity.prototype.spawn_enemy = function(game) {
 	var roll = Math.floor(Math.random() * 4);
@@ -689,7 +714,9 @@ function main () {
 		var player_ship = new PlayerShip(game, 300, 300);
 		game.entities.push(player_ship);
 		game.entities.push(new UIMissileDisplay(game, 8 * 12 / 2 + 16, 480 - 4 * 8 / 2 - 16, player_ship));
-		game.entities.push(new NPCDirectorEntity(game));
+		game.entities.push(new NPCDirectorEntity(game, [
+			{ spawn_interval: 60, max_spawned: 6, wave_spawn_count: 16 },
+		]));
 
 
 		// var asteroid = new SmallAsteroid(game, 800, 200,
