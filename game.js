@@ -17,20 +17,30 @@ function wrapped_position (game, pxy) {
 
 function WrappingPathEntity(game, px, py, width, height, image, path) {
 	PathEntity.call(this, game, px, py, width, height, image, path);
+	this.disable_wrapping_first_time = true;
 }
 WrappingPathEntity.prototype = Object.create(PathEntity.prototype);
 WrappingPathEntity.prototype.constructor = WrappingPathEntity;
 WrappingPathEntity.prototype.update = function(game) {
 	PathEntity.prototype.update.call(this, game);
 
-	var wrapped = wrapped_position(game, this);
-	this.px = wrapped.px;
-	this.py = wrapped.py;
+	if (this.disable_wrapping_first_time) {
+		// perform check to see if the entity has completely entered the field
+		// and it is time to enable wrapping
+		if (this.px - this.width / 2 >= 0 && this.px + this.width / 2 < game.canvas.width &&
+				this.py - this.height / 2 >= 0 && this.py + this.height / 2 < game.canvas.height) {
+			this.disable_wrapping_first_time = false;
+		}
+	} else {
+		var wrapped = wrapped_position(game, this);
+		this.px = wrapped.px;
+		this.py = wrapped.py;
+	}
 };
 WrappingPathEntity.prototype.draw = function(ctx) {
 	PathEntity.prototype.draw.call(this, ctx);
 
-	if (this.visible) {
+	if (this.visible && !this.disable_wrapping_first_time) {
 		// console.log('debug: ', ctx.canvas.width, ctx.canvas.height);
 		var store_px = this.px;
 		var store_py = this.py;
@@ -110,19 +120,21 @@ WrappingCollidingEntity.prototype.update = function(game) {
 
 	this.check_collision(game);
 
-	this.px = wrapped_px;
-	this.check_collision(game);
-	this.px = store_px;
+	if (!this.disable_wrapping_first_time) {
+		this.px = wrapped_px;
+		this.check_collision(game);
+		this.px = store_px;
 
-	this.py = wrapped_py;
-	this.check_collision(game);
-	this.py = store_py;
+		this.py = wrapped_py;
+		this.check_collision(game);
+		this.py = store_py;
 
-	this.px = wrapped_px;
-	this.py = wrapped_py;
-	this.check_collision(game);
-	this.px = store_px;
-	this.py = store_py;
+		this.px = wrapped_px;
+		this.py = wrapped_py;
+		this.check_collision(game);
+		this.px = store_px;
+		this.py = store_py;
+	}
 };
 WrappingCollidingEntity.prototype.check_collision = function(game) {
 	for (var i = 0; i < this.collision_map.length; i++) {
@@ -137,14 +149,92 @@ WrappingCollidingEntity.prototype.check_collision = function(game) {
 
 
 function Asteroid(game, px, py, path) {
-	WrappingPathEntity.call(this, game, px, py, 64, 64, game.images.asteroid_64, path);
-	this.health = 100;
+	WrappingCollidingEntity.call(this, game, px, py, 64, 64, game.images.asteroid_64, path);
 	this.angle = Math.random() * 360;
 	this.rotation = Math.random() * 2 - 1;
-	// this.collision_radius = size * 30;
 }
-Asteroid.prototype = Object.create(WrappingPathEntity.prototype);
+Asteroid.prototype = Object.create(WrappingCollidingEntity.prototype);
 Asteroid.prototype.collision_radius = 30;
+Asteroid.prototype.collision_map = [
+	{
+		class: PlayerMissile,
+		callback: 'hit',
+	},
+];
+Asteroid.prototype.hit = function(game, other) {
+	game.entities_to_remove.push(other);
+	game.entities_to_remove.push(this);
+	// spawn rocket explosion particles
+	for (var i = 0; i < 25; i++) {
+		game.particle_systems.fire_particles.add_particle(other.px, other.py, 4);
+	}
+};
+
+function LargeAsteroid(game, px, py, path) {
+	Asteroid.call(this, game, px, py, path);
+	this.width = 128;
+	this.height = 128;
+}
+LargeAsteroid.prototype = Object.create(Asteroid.prototype);
+LargeAsteroid.prototype.collision_radius = 60;
+LargeAsteroid.prototype.hit = function(game, other) {
+	Asteroid.prototype.hit.call(this, game, other);
+	if (Math.random() < 0.5) {
+		var path = [ { angle: this.path[this.path_index - 1].angle + Math.random() * 90 - 45,
+				speed: this.path[this.path_index - 1].speed * (1 + Math.random() * 1 - 0.5), }, ];
+		var child = new MediumAsteroid(game, this.px, this.py, path);
+		game.entities_to_add.push(child);
+	} else if (Math.random() < 0.5) {
+		var path = [ { angle: this.path[this.path_index - 1].angle + Math.random() * 90 - 45,
+				speed: this.path[this.path_index - 1].speed * (1 + Math.random() * 1 - 0.5), }, ];
+		var child = new SmallAsteroid(game, this.px, this.py, path);
+		game.entities_to_add.push(child);
+	}
+
+	if (Math.random() < 0.5) {
+		var path = [ { angle: this.path[this.path_index - 1].angle + Math.random() * 90 - 45,
+				speed: this.path[this.path_index - 1].speed * (1 + Math.random() * 1 - 0.5), }, ];
+		var child = new MediumAsteroid(game, this.px, this.py, path);
+		game.entities_to_add.push(child);
+	} else if (Math.random() < 0.5) {
+		var path = [ { angle: this.path[this.path_index - 1].angle + Math.random() * 90 - 45,
+				speed: this.path[this.path_index - 1].speed * (1 + Math.random() * 1 - 0.5), }, ];
+		var child = new SmallAsteroid(game, this.px, this.py, path);
+		game.entities_to_add.push(child);
+	}
+};
+
+function MediumAsteroid(game, px, py, path) {
+	Asteroid.call(this, game, px, py, path);
+	this.width = 64;
+	this.height = 64;
+}
+MediumAsteroid.prototype = Object.create(Asteroid.prototype);
+MediumAsteroid.prototype.collision_radius = 30;
+MediumAsteroid.prototype.hit = function(game, other) {
+	Asteroid.prototype.hit.call(this, game, other);
+	if (Math.random() < 0.5) {
+		var path = [ { angle: this.path[this.path_index - 1].angle + Math.random() * 90 - 45,
+				speed: this.path[this.path_index - 1].speed * (1 + Math.random() * 1 - 0.5), }, ];
+		var child = new SmallAsteroid(game, this.px, this.py, path);
+		game.entities_to_add.push(child);
+	}
+	if (Math.random() < 0.5) {
+		var path = [ { angle: this.path[this.path_index - 1].angle + Math.random() * 90 - 45,
+				speed: this.path[this.path_index - 1].speed * (1 + Math.random() * 1 - 0.5), }, ];
+		var child = new SmallAsteroid(game, this.px, this.py, path);
+		game.entities_to_add.push(child);
+	}
+};
+
+
+function SmallAsteroid(game, px, py, path) {
+	Asteroid.call(this, game, px, py, path);
+	this.width = 32;
+	this.height = 32;
+}
+SmallAsteroid.prototype = Object.create(Asteroid.prototype);
+SmallAsteroid.prototype.collision_radius = 15;
 
 
 function PlayerShip(game, px, py, path) {
@@ -252,7 +342,6 @@ PlayerShip.prototype.update = function(game) {
 
 	WrappingCollidingEntity.prototype.update.call(this, game);
 };
-// Asteroid.prototype.collision_radius = 32;
 PlayerShip.prototype.fire = function(game) {
 	var offset = point_offset(this.angle, this.width / 2);
 	var speed = point_offset(this.angle, 8);
@@ -276,26 +365,27 @@ PlayerShip.prototype.hit_asteroid = function(game, other) {
 
 
 function PlayerMissile(game, px, py, path) {
-	WrappingCollidingEntity.call(this, game, px, py, 16, 16, game.images.missile, path);
+	WrappingPathEntity.call(this, game, px, py, 16, 16, game.images.missile, path);
 	this.angle_granularity = 5;
+	this.disable_wrapping_first_time = false;
 }
-PlayerMissile.prototype = Object.create(WrappingCollidingEntity.prototype);
+PlayerMissile.prototype = Object.create(WrappingPathEntity.prototype);
 PlayerMissile.prototype.collision_radius = 4;
-PlayerMissile.prototype.collision_map = [
-	{
-		class: Asteroid,
-		callback: 'hit_asteroid',
-	},
-];
-PlayerMissile.prototype.hit_asteroid = function(game, other) {
-	game.entities_to_remove.push(other);
-	game.entities_to_remove.push(this);
-	for (var i = 0; i < 25; i++) {
-		// our position might be wildly offset, so we wrap our position to spawn particles properly
-		var pos = wrapped_position(game, this);
-		game.particle_systems.fire_particles.add_particle(pos.px, pos.py, 4);
-	}
-};
+// PlayerMissile.prototype.collision_map = [
+// 	{
+// 		class: Asteroid,
+// 		callback: 'hit_asteroid',
+// 	},
+// ];
+// PlayerMissile.prototype.hit_asteroid = function(game, other) {
+// 	game.entities_to_remove.push(other);
+// 	game.entities_to_remove.push(this);
+// 	for (var i = 0; i < 25; i++) {
+// 		// our position might be wildly offset, so we wrap our position to spawn particles properly
+// 		var pos = wrapped_position(game, this);
+// 		game.particle_systems.fire_particles.add_particle(pos.px, pos.py, 4);
+// 	}
+// };
 
 
 function UIP9Box(game, px, py, width, height, sizex, sizey, image) {
@@ -401,13 +491,28 @@ function main () {
 		// // game.entities.push(new XHive(game, 16 * 5 + 48 / 2, 16 * 5 + 48 / 2));
 		var player_ship = new PlayerShip(game, 300, 300);
 		game.entities.push(player_ship);
-		game.entities.push(new Asteroid(game, 0, 460,
-			[ { angle: Math.random() * 360, speed: 0.25 + Math.random() * 0.25, }, ]));
-		game.entities.push(new Asteroid(game, 0, 460,
-			[ { angle: Math.random() * 360, speed: 0.25 + Math.random() * 0.25, }, ]));
-		game.entities.push(new Asteroid(game, 0, 460,
-			[ { angle: Math.random() * 360, speed: 0.25 + Math.random() * 0.25, }, ]));
 		game.entities.push(new UIMissileDisplay(game, 8 * 12 / 2 + 16, 480 - 4 * 8 / 2 - 16, player_ship));
+
+		for (var i = 0; i < 5; i++) {
+			var startx = -20;
+			var starty = -20;
+			var targetx = 32 + Math.random() * (640 - 32 * 2);
+			var targety = 32 + Math.random() * (480 - 32 * 2);
+			var angle = point_angle(startx, starty, targetx, targety);
+
+			game.entities.push(new LargeAsteroid(game, startx, starty,
+				[ { angle: angle, speed: 0.25 + Math.random() * 0.25, }, ]));
+		}
+		// for (var i = 0; i < 10; i++) {
+		// 	var startx = -20;
+		// 	var starty = -20;
+		// 	var targetx = 32 + Math.random() * (640 - 32 * 2);
+		// 	var targety = 32 + Math.random() * (480 - 32 * 2);
+		// 	var angle = point_angle(startx, starty, targetx, targety);
+
+		// 	game.entities.push(new SmallAsteroid(game, startx, starty,
+		// 		[ { angle: angle, speed: 0.25 + Math.random() * 0.5, }, ]));
+		// }
 		// game.entities.push(new UIP9Box(game, 8 * 12 / 2 + 16, 480 - 4 * 8 / 2 - 16, 12, 8, 8, 4, game.images.p9_green_ui));
 
 		game.particle_systems.fire_particles = new ParticleEffectSystem(game, {
