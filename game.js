@@ -258,8 +258,20 @@ Asteroid.prototype.collision_map = [
 		class: PlayerMissile,
 		callback: 'hit',
 	},
+	{
+		class: PlayerShip,
+		callback: 'hit_player',
+	},
 ];
 Asteroid.prototype.hit = function(game, other) {
+	game.entities_to_remove.push(other);
+	game.entities_to_remove.push(this);
+	// spawn rocket explosion particles
+	for (var i = 0; i < 25; i++) {
+		game.particle_systems.fire_particles.add_particle(other.px, other.py, 4);
+	}
+};
+Asteroid.prototype.hit_player = function(game, other) {
 	game.entities_to_remove.push(other);
 	game.entities_to_remove.push(this);
 	// spawn rocket explosion particles
@@ -281,11 +293,13 @@ LargeAsteroid.prototype.hit = function(game, other) {
 		var path = [ { angle: this.path[this.path_index - 1].angle + Math.random() * 90 - 45,
 				speed: this.path[this.path_index - 1].speed * (1 + Math.random() * 1 - 0.5), }, ];
 		var child = new MediumAsteroid(game, this.px, this.py, path);
+		child.disable_wrapping_first_time = false;
 		game.entities_to_add.push(child);
 	} else if (Math.random() < 0.5) {
 		var path = [ { angle: this.path[this.path_index - 1].angle + Math.random() * 90 - 45,
 				speed: this.path[this.path_index - 1].speed * (1 + Math.random() * 1 - 0.5), }, ];
 		var child = new SmallAsteroid(game, this.px, this.py, path);
+		child.disable_wrapping_first_time = false;
 		game.entities_to_add.push(child);
 	}
 
@@ -293,11 +307,13 @@ LargeAsteroid.prototype.hit = function(game, other) {
 		var path = [ { angle: this.path[this.path_index - 1].angle + Math.random() * 90 - 45,
 				speed: this.path[this.path_index - 1].speed * (1 + Math.random() * 1 - 0.5), }, ];
 		var child = new MediumAsteroid(game, this.px, this.py, path);
+		child.disable_wrapping_first_time = false;
 		game.entities_to_add.push(child);
 	} else if (Math.random() < 0.5) {
 		var path = [ { angle: this.path[this.path_index - 1].angle + Math.random() * 90 - 45,
 				speed: this.path[this.path_index - 1].speed * (1 + Math.random() * 1 - 0.5), }, ];
 		var child = new SmallAsteroid(game, this.px, this.py, path);
+		child.disable_wrapping_first_time = false;
 		game.entities_to_add.push(child);
 	}
 };
@@ -315,12 +331,14 @@ MediumAsteroid.prototype.hit = function(game, other) {
 		var path = [ { angle: this.path[this.path_index - 1].angle + Math.random() * 90 - 45,
 				speed: this.path[this.path_index - 1].speed * (1 + Math.random() * 1 - 0.5), }, ];
 		var child = new SmallAsteroid(game, this.px, this.py, path);
+		child.disable_wrapping_first_time = false;
 		game.entities_to_add.push(child);
 	}
 	if (Math.random() < 0.5) {
 		var path = [ { angle: this.path[this.path_index - 1].angle + Math.random() * 90 - 45,
 				speed: this.path[this.path_index - 1].speed * (1 + Math.random() * 1 - 0.5), }, ];
 		var child = new SmallAsteroid(game, this.px, this.py, path);
+		child.disable_wrapping_first_time = false;
 		game.entities_to_add.push(child);
 	}
 };
@@ -350,10 +368,10 @@ function PlayerShip(game, px, py, path) {
 PlayerShip.prototype = Object.create(WrappingCollidingEntity.prototype);
 PlayerShip.prototype.collision_radius = 8;
 PlayerShip.prototype.collision_map = [
-	{
-		class: Asteroid,
-		callback: 'hit_asteroid',
-	},
+	// {
+	// 	class: Asteroid,
+	// 	callback: 'hit_asteroid',
+	// },
 ];
 PlayerShip.prototype.update = function(game) {
 	if (game.keystate.Q) {
@@ -584,8 +602,11 @@ NPCDirectorEntity.prototype.update = function(game) {
 		var count_asteroids = game.query_entities(Asteroid).length;
 		if (count_asteroids < this.max_spawned && this.wave_spawn_count > 0) {
 			this.wave_spawn_count--;
-			this.spawn_enemy(game);
-			this.spawn_timer = 60;
+			this.spawn_timer = this.spawn_interval;
+
+			for (var i = 0; i < this.batches.length; i++) {
+				this.spawn_batch(game, this.batches[i]);
+			}
 		} else if (count_asteroids === 0 && this.wave_spawn_count === 0) {
 			console.log('wave cleared');
 			this.start_next_wave(game);
@@ -608,34 +629,46 @@ NPCDirectorEntity.prototype.start_wave = function(game, wave) {
 	this.spawn_timer = this.spawn_interval;
 	this.max_spawned = wave.max_spawned || 4;
 	this.wave_spawn_count = wave.wave_spawn_count || 10;
+	this.batches = wave.batches;
 };
-NPCDirectorEntity.prototype.spawn_enemy = function(game) {
-	var roll = Math.floor(Math.random() * 4);
-	var offsetx, offsety;
-	if (roll === 0) {
-		offsetx = Math.random() * game.canvas.width;
-		offsety = -100;
-	} else if (roll === 1) {
-		offsetx = Math.random() * game.canvas.width;
-		offsety = game.canvas.height + 100;
-	} else if (roll === 0) {
-		offsetx = -100;
-		offsety = Math.random() * game.canvas.height;
-	} else {
-		offsetx = game.canvas.width + 100;
-		offsety = Math.random() * game.canvas.height;
-	}
+NPCDirectorEntity.prototype.spawn_batch = function(game, batch) {
+	var direction = batch.direction;
 
-	var target_point = border_point(game, { px: Math.random() * game.canvas.width, py: Math.random() * game.canvas.height }, 32);
-	var angle = point_angle(offsetx, offsety, target_point.px, target_point.py);
+	var min_speed = batch.min_speed || 0.5;
+	var max_speed = batch.max_speed || 0.5;
 
-	var asteroid = new SmallAsteroid(game, offsetx, offsety,
-		[ { angle: angle, speed: 0.25 + Math.random() * 0.25, }, ]);
-	game.entities.push(asteroid);
-	var entrance_position = asteroid_entrance(game, asteroid);
-	if (entrance_position) {
-		entrance_position = border_point(game, entrance_position, 16);
-		game.entities.push(new UIWarningSign(game, entrance_position.px, entrance_position.py));
+	var enemy_type = batch.enemy_type || SmallAsteroid;
+	var spawn_count = batch.spawn_count || 1;
+
+	for (var i = 0; i < spawn_count; i++) {
+		if (direction === undefined)
+			direction = Math.floor(Math.random() * 4);
+		var offsetx, offsety;
+		if (direction === 0) {
+			offsetx = game.canvas.width + 100;
+			offsety = Math.random() * game.canvas.height;
+		} else if (direction === 1) {
+			offsetx = Math.random() * game.canvas.width;
+			offsety = game.canvas.height + 100;
+		} else if (direction === 2) {
+			offsetx = -100;
+			offsety = Math.random() * game.canvas.height;
+		} else {
+			offsetx = Math.random() * game.canvas.width;
+			offsety = -100;
+		}
+
+		var target_point = border_point(game, { px: Math.random() * game.canvas.width, py: Math.random() * game.canvas.height }, 32);
+		var angle = point_angle(offsetx, offsety, target_point.px, target_point.py);
+
+		var asteroid = new enemy_type(game, offsetx, offsety,
+			[ { angle: angle, speed: min_speed + Math.random() * (max_speed - min_speed), }, ]);
+		game.entities.push(asteroid);
+		var entrance_position = asteroid_entrance(game, asteroid);
+		if (entrance_position) {
+			entrance_position = border_point(game, entrance_position, 16);
+			game.entities.push(new UIWarningSign(game, entrance_position.px, entrance_position.py));
+		}
 	}
 };
 
@@ -669,7 +702,7 @@ function asteroid_entrance(game, asteroid) {
 		entrances.push(intersection);
 
 	entrances.sort(function (a, b) {
-		return points_dist(asteroid, a) - points_dist(asteroid_path, b);
+		return points_dist(asteroid, a) - points_dist(asteroid, b);
 	});
 	// console.log('entrances:', entrances);
 
@@ -715,7 +748,15 @@ function main () {
 		game.entities.push(player_ship);
 		game.entities.push(new UIMissileDisplay(game, 8 * 12 / 2 + 16, 480 - 4 * 8 / 2 - 16, player_ship));
 		game.entities.push(new NPCDirectorEntity(game, [
-			{ spawn_interval: 60, max_spawned: 6, wave_spawn_count: 16 },
+			{ spawn_interval: 120, max_spawned: 8, wave_spawn_count: 4, batches: [
+				{ direction: 2, spawn_count: 2, enemy_type: MediumAsteroid, min_speed: 1, }
+			] },
+			{ spawn_interval: 60, max_spawned: 1, wave_spawn_count: 4, batches: [
+				{ spawn_count: 1, enemy_type: LargeAsteroid, max_speed: 2, }
+			] },
+			// { spawn_interval: 1, max_spawned: 1, wave_spawn_count: 4, batches: [
+			// 	{ spawn_count: 1, enemy_type: LargeAsteroid, min_speed: 0.1, max_speed: 0.1, }
+			// ] },
 		]));
 
 
