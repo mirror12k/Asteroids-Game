@@ -1,6 +1,46 @@
 
 
-function wrapped_position (game, pxy) {
+
+function line_intersection(p, pr, q, qs) {
+	var r = { px: pr.px - p.px, py: pr.py - p.py };
+	var s = { px: qs.px - q.px, py: qs.py - q.py };
+	var p_q = { px: q.px - p.px, py: q.py - p.py };
+	var rxs = r.px * s.py - r.py * s.px;
+	if (rxs === 0)
+		return undefined;
+	var p_qxs = p_q.px * s.py - p_q.py * s.px;
+	var p_qxr = p_q.px * r.py - p_q.py * r.px;
+	var t = p_qxs / rxs;
+	var u = p_qxr / rxs;
+	// console.log("t:", t, "u:", u);
+
+	return { px: p.px + r.px * t, py: p.py + r.py * t };
+	// return { px: q.px + s.px * u, py: q.py + s.py * u };
+}
+
+function segment_intersection(p, pr, q, qs) {
+	var r = { px: pr.px - p.px, py: pr.py - p.py };
+	var s = { px: qs.px - q.px, py: qs.py - q.py };
+	var p_q = { px: q.px - p.px, py: q.py - p.py };
+	var rxs = r.px * s.py - r.py * s.px;
+	if (rxs === 0)
+		return undefined;
+	var p_qxs = p_q.px * s.py - p_q.py * s.px;
+	var p_qxr = p_q.px * r.py - p_q.py * r.px;
+	var t = p_qxs / rxs;
+	var u = p_qxr / rxs;
+	// console.log("t:", t, "u:", u);
+
+	if (t >= 0 && 1 >= t && u >= 0 && 1 >= u)
+		return { px: p.px + r.px * t, py: p.py + r.py * t };
+	else
+		return undefined;
+	// return { px: q.px + s.px * u, py: q.py + s.py * u };
+}
+
+
+
+function wrapped_point (game, pxy) {
 	var wrapped_pxy = { px: pxy.px, py: pxy.py };
 	if (wrapped_pxy.px < 0) {
 		wrapped_pxy.px += game.canvas.width;
@@ -14,6 +54,64 @@ function wrapped_position (game, pxy) {
 	}
 	return wrapped_pxy;
 }
+
+function border_point (game, pxy, offset) {
+	var border_pxy = { px: pxy.px, py: pxy.py };
+	if (border_pxy.px <= offset)
+		border_pxy.px += offset;
+	if (border_pxy.py <= offset)
+		border_pxy.py += offset;
+	if (border_pxy.px >= game.canvas.width - offset)
+		border_pxy.px -= offset;
+	if (border_pxy.py >= game.canvas.height - offset)
+		border_pxy.py -= offset;
+
+	return border_pxy;
+}
+
+// function DebugEntity(game, player_ship) {
+// 	Entity.call(this, game);
+// 	this.player_ship = player_ship;
+// }
+// DebugEntity.prototype = Object.create(Entity.prototype);
+// DebugEntity.prototype.constructor = DebugEntity;
+// timer = 60;
+// DebugEntity.prototype.draw = function(ctx) {
+// 	Entity.prototype.draw.call(this, ctx);
+
+// 	var offset = point_offset(this.player_ship.angle, 200);
+// 	var s1 = [{ px: this.player_ship.px, py: this.player_ship.py }, { px: this.player_ship.px + offset.px, py: this.player_ship.py + offset.py }];
+// 	var s2 = [{ px: 0, py: 0 }, { px: ctx.canvas.width, py: ctx.canvas.height }];
+
+
+// 	timer++;
+// 	if (timer >= 60) {
+// 		timer = 0;
+// 		this.intersection = segment_intersection(s1[0], s1[1], s2[0], s2[1]);
+// 	}
+
+// 	ctx.beginPath();
+// 	ctx.lineWidth = 3;
+// 	ctx.strokeStyle = '#f08';
+// 	ctx.moveTo(s1[0].px,s1[0].py);
+// 	ctx.lineTo(s1[1].px,s1[1].py);
+// 	ctx.stroke();
+
+// 	ctx.beginPath();
+// 	ctx.lineWidth = 3;
+// 	ctx.strokeStyle = '#f00';
+// 	ctx.moveTo(s2[0].px,s2[0].py);
+// 	ctx.lineTo(s2[1].px,s2[1].py);
+// 	ctx.stroke();
+
+// 	if (this.intersection) {
+// 		ctx.beginPath();
+// 		ctx.lineWidth = 2;
+// 		ctx.strokeStyle = '#0f0';
+// 		ctx.rect(this.intersection.px - 2, this.intersection.py - 2, 4, 4);
+// 		ctx.stroke();
+// 	}
+// };
 
 function WrappingPathEntity(game, px, py, width, height, image, path) {
 	PathEntity.call(this, game, px, py, width, height, image, path);
@@ -32,7 +130,7 @@ WrappingPathEntity.prototype.update = function(game) {
 			this.disable_wrapping_first_time = false;
 		}
 	} else {
-		var wrapped = wrapped_position(game, this);
+		var wrapped = wrapped_point(game, this);
 		this.px = wrapped.px;
 		this.py = wrapped.py;
 	}
@@ -382,7 +480,7 @@ PlayerMissile.prototype.collision_radius = 4;
 // 	game.entities_to_remove.push(this);
 // 	for (var i = 0; i < 25; i++) {
 // 		// our position might be wildly offset, so we wrap our position to spawn particles properly
-// 		var pos = wrapped_position(game, this);
+// 		var pos = wrapped_point(game, this);
 // 		game.particle_systems.fire_particles.add_particle(pos.px, pos.py, 4);
 // 	}
 // };
@@ -453,7 +551,105 @@ UIMissileDisplay.prototype.update = function(game) {
 	}
 };
 
+function UIWarningSign(game, px, py) {
+	ScreenEntity.call(this, game, px, py, 32, 32, game.images.warning_sign);
+	this.blink = 60;
+	this.blink_count = 5;
+}
+UIWarningSign.prototype = Object.create(ScreenEntity.prototype);
+UIWarningSign.prototype.update = function(game) {
+	Entity.prototype.update.call(this, game);
+	this.blink--;
+	if (this.blink < 0) {
+		this.blink_count--;
+		if (this.blink_count <= 0)
+			game.entities_to_remove.push(this);
+		else
+			this.blink = 60;
+	}
+	this.visible = this.blink > 20;
+};
 
+function NPCDirectorEntity(game) {
+	Entity.call(this, game);
+	this.spawn_timer = 60;
+}
+NPCDirectorEntity.prototype = Object.create(Entity.prototype);
+NPCDirectorEntity.prototype.update = function(game) {
+	Entity.prototype.update.call(this, game);
+
+	this.spawn_timer--;
+	if (this.spawn_timer === 0) {
+		this.spawn_enemy(game);
+		this.spawn_timer = 60;
+	}
+};
+NPCDirectorEntity.prototype.spawn_enemy = function(game) {
+	var roll = Math.floor(Math.random() * 4);
+	var offsetx, offsety;
+	if (roll === 0) {
+		offsetx = Math.random() * game.canvas.width;
+		offsety = -100;
+	} else if (roll === 1) {
+		offsetx = Math.random() * game.canvas.width;
+		offsety = game.canvas.height + 100;
+	} else if (roll === 0) {
+		offsetx = -100;
+		offsety = Math.random() * game.canvas.height;
+	} else {
+		offsetx = game.canvas.width + 100;
+		offsety = Math.random() * game.canvas.height;
+	}
+
+	var target_point = border_point(game, { px: Math.random() * game.canvas.width, py: Math.random() * game.canvas.height }, 32);
+	var angle = point_angle(offsetx, offsety, target_point.px, target_point.py);
+
+	var asteroid = new SmallAsteroid(game, offsetx, offsety,
+		[ { angle: angle, speed: 0.25 + Math.random() * 0.25, }, ]);
+	game.entities.push(asteroid);
+	var entrance_position = asteroid_entrance(game, asteroid);
+	if (entrance_position) {
+		entrance_position = border_point(game, entrance_position, 16);
+		game.entities.push(new UIWarningSign(game, entrance_position.px, entrance_position.py));
+	}
+};
+
+
+
+function asteroid_entrance(game, asteroid) {
+	var points = [
+		{ px: 0, py: 0 },
+		{ px: game.canvas.width, py: 0 },
+		{ px: game.canvas.width, py: game.canvas.height },
+		{ px: 0, py: game.canvas.height },
+	];
+
+	var offset = point_offset(asteroid.path[0].angle, 1000);
+	var asteroid_path = [ asteroid, { px: asteroid.px + offset.px, py: asteroid.py + offset.py } ];
+
+	var intersection;
+	var entrances = [];
+
+	intersection = segment_intersection(asteroid_path[0], asteroid_path[1], points[0], points[1]);
+	if (intersection)
+		entrances.push(intersection);
+	intersection = segment_intersection(asteroid_path[0], asteroid_path[1], points[1], points[2]);
+	if (intersection)
+		entrances.push(intersection);
+	intersection = segment_intersection(asteroid_path[0], asteroid_path[1], points[2], points[3]);
+	if (intersection)
+		entrances.push(intersection);
+	intersection = segment_intersection(asteroid_path[0], asteroid_path[1], points[3], points[0]);
+	if (intersection)
+		entrances.push(intersection);
+
+	entrances.sort(function (a, b) {
+		return points_dist(asteroid, a) - points_dist(asteroid_path, b);
+	});
+	// console.log('entrances:', entrances);
+
+	return entrances[0];
+}
 
 
 
@@ -472,6 +668,7 @@ function main () {
 
 		particle_effect_generic: "particle_effect_generic.png",
 		p9_green_ui: "p9_green_ui.png",
+		warning_sign: "warning_sign.png",
 		ui_missile: "ui_missile.png",
 	};
 
@@ -492,17 +689,29 @@ function main () {
 		var player_ship = new PlayerShip(game, 300, 300);
 		game.entities.push(player_ship);
 		game.entities.push(new UIMissileDisplay(game, 8 * 12 / 2 + 16, 480 - 4 * 8 / 2 - 16, player_ship));
+		game.entities.push(new NPCDirectorEntity(game));
 
-		for (var i = 0; i < 5; i++) {
-			var startx = -20;
-			var starty = -20;
-			var targetx = 32 + Math.random() * (640 - 32 * 2);
-			var targety = 32 + Math.random() * (480 - 32 * 2);
-			var angle = point_angle(startx, starty, targetx, targety);
 
-			game.entities.push(new LargeAsteroid(game, startx, starty,
-				[ { angle: angle, speed: 0.25 + Math.random() * 0.25, }, ]));
-		}
+		// var asteroid = new SmallAsteroid(game, 800, 200,
+		// 	[ { angle: 180, speed: 0.75 + Math.random() * 0.25, }, ]);
+		// game.entities.push(asteroid);
+		// var entrance_position = asteroid_entrance(game, asteroid);
+		// if (entrance_position) {
+		// 	entrance_position = border_point(game, entrance_position, 16);
+		// 	game.entities.push(new UIWarningSign(game, entrance_position.px, entrance_position.py));
+		// }
+		// game.entities.push(new DebugEntity(game, player_ship));
+
+		// for (var i = 0; i < 5; i++) {
+		// 	var startx = -20;
+		// 	var starty = -20;
+		// 	var targetx = 32 + Math.random() * (640 - 32 * 2);
+		// 	var targety = 32 + Math.random() * (480 - 32 * 2);
+		// 	var angle = point_angle(startx, starty, targetx, targety);
+
+		// 	game.entities.push(new LargeAsteroid(game, startx, starty,
+		// 		[ { angle: angle, speed: 0.25 + Math.random() * 0.25, }, ]));
+		// }
 		// for (var i = 0; i < 10; i++) {
 		// 	var startx = -20;
 		// 	var starty = -20;
