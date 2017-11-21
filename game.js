@@ -256,6 +256,10 @@ Asteroid.prototype.collision_radius = 30;
 Asteroid.prototype.collision_map = [
 	{
 		class: PlayerMissile,
+		callback: 'hit_missile',
+	},
+	{
+		class: Explosion,
 		callback: 'hit',
 	},
 	{
@@ -263,17 +267,20 @@ Asteroid.prototype.collision_map = [
 		callback: 'hit_player',
 	},
 ];
-Asteroid.prototype.hit = function(game, other) {
+Asteroid.prototype.hit_missile = function(game, other) {
+	this.hit(game, other);
 	game.entities_to_remove.push(other);
-	game.entities_to_remove.push(this);
 	// spawn rocket explosion particles
 	for (var i = 0; i < 25; i++) {
 		game.particle_systems.fire_particles.add_particle(other.px, other.py, 4);
 	}
 };
-Asteroid.prototype.hit_player = function(game, other) {
-	game.entities_to_remove.push(other);
+Asteroid.prototype.hit = function(game, other) {
 	game.entities_to_remove.push(this);
+};
+Asteroid.prototype.hit_player = function(game, other) {
+	this.hit(game, other);
+	game.entities_to_remove.push(other);
 	// spawn rocket explosion particles
 	for (var i = 0; i < 25; i++) {
 		game.particle_systems.fire_particles.add_particle(other.px, other.py, 4);
@@ -325,6 +332,37 @@ ExplosiveCharge.prototype.update = function(game) {
 	}
 };
 
+function Explosion(game, px, py, animation_offset) {
+	var size_factor = 1 + Math.random() * 0.25;
+	WrappingCollidingEntity.call(this, game, px, py, 64 * size_factor, 64 * size_factor, game.images.explosion);
+	this.angle = Math.random() * 360;
+	this.animation_index = animation_offset;
+	this.max_frame = 6;
+}
+Explosion.prototype = Object.create(WrappingCollidingEntity.prototype);
+Explosion.prototype.collision_radius = 32;
+Explosion.prototype.collision_map = [
+	{
+		class: PlayerShip,
+		callback: 'hit_player',
+	},
+];
+Explosion.prototype.update = function(game) {
+	WrappingCollidingEntity.prototype.update.call(this, game);
+	this.animation_index++;
+	this.frame = Math.floor(this.animation_index / 4);
+	if (this.frame >= this.max_frame) {
+		game.entities_to_remove.push(this);
+	}
+};
+Explosion.prototype.hit_player = function(game, other) {
+	game.entities_to_remove.push(other);
+	// spawn rocket explosion particles
+	for (var i = 0; i < 25; i++) {
+		game.particle_systems.fire_particles.add_particle(other.px, other.py, 4);
+	}
+};
+
 function MediumAsteroid(game, px, py, path) {
 	Asteroid.call(this, game, px, py, path);
 	this.width = 64;
@@ -360,10 +398,11 @@ MediumExplosivesAsteroid.prototype = Object.create(MediumAsteroid.prototype);
 MediumExplosivesAsteroid.prototype.collision_radius = 30;
 MediumExplosivesAsteroid.prototype.hit = function(game, other) {
 	MediumAsteroid.prototype.hit.call(this, game, other);
-	// for (var i = 0; i < this.sub_entities.length; i++) {
-	// 	var ent = this.sub_entities[i];
-	// 	ent.px += this.px
-	// }
+	var count = 3 + Math.floor(Math.random() * 3);
+	for (var i = 0; i < count; i++) {
+		var offset = point_offset((360 / count) * i + Math.random() * (360 / count / 2), Math.random() * this.collision_radius * 1.8);
+		game.entities_to_add.push(new Explosion(game, this.px + offset.px, this.py + offset.py, Math.floor(Math.random() * 8)));
+	}
 };
 
 
@@ -753,6 +792,7 @@ function main () {
 		ufo: "ufo.png",
 		asteroid_64: "asteroid_64.png",
 		explosive_charge: "explosive_charge.png",
+		explosion: "explosion.png",
 
 		particle_effect_generic: "particle_effect_generic.png",
 		p9_green_ui: "p9_green_ui.png",
@@ -778,20 +818,29 @@ function main () {
 		game.entities.push(player_ship);
 		game.entities.push(new UIMissileDisplay(game, 8 * 12 / 2 + 16, 480 - 4 * 8 / 2 - 16, player_ship));
 		game.entities.push(new NPCDirectorEntity(game, [
-			{ spawn_interval: 60, max_spawned: 8, max_spawned_to_end: 4, wave_spawn_count: 4, batches: [
-				{ direction: 2, spawn_count: 2, enemy_type: MediumExplosivesAsteroid, min_speed: 1, },
-			] },
-			{ spawn_interval: 60, wave_spawn_count: 1, batches: [
-				{ spawn_count: 1, enemy_type: LargeAsteroid, max_speed: 2, },
-			] },
-			{ spawn_interval: 60, wave_spawn_count: 1, batches: [
-				{ spawn_count: 1, enemy_type: LargeAsteroid, max_speed: 2, },
-			] },
-			{ spawn_interval: 120, max_spawned: 6, wave_spawn_count: 2, batches: [
+			// { spawn_interval: 60, max_spawned: 8, max_spawned_to_end: 4, wave_spawn_count: 4, batches: [
+			// 	{ direction: 2, spawn_count: 2, enemy_type: MediumAsteroid, min_speed: 1, },
+			// ] },
+			// { spawn_interval: 60, wave_spawn_count: 1, batches: [
+			// 	{ spawn_count: 1, enemy_type: LargeAsteroid, max_speed: 2, },
+			// 	{ spawn_count: 1, enemy_type: MediumExplosivesAsteroid, max_speed: 0.5, },
+			// ] },
+			// { spawn_interval: 60, wave_spawn_count: 1, batches: [
+			// 	{ spawn_count: 1, enemy_type: LargeAsteroid, max_speed: 2, },
+			// ] },
+			{ spawn_interval: 120, max_spawned: 6, max_spawned_to_end: 6, wave_spawn_count: 1, batches: [
 				{ direction: 0, spawn_count: 4, enemy_type: SmallAsteroid, },
 				{ direction: 1, spawn_count: 4, enemy_type: SmallAsteroid, },
 				{ direction: 2, spawn_count: 4, enemy_type: SmallAsteroid, },
 				{ direction: 3, spawn_count: 4, enemy_type: SmallAsteroid, },
+			] },
+			{ spawn_interval: 60, max_spawned: 4, max_spawned_to_end: 2, wave_spawn_count: 4, batches: [
+				{ direction: 3, spawn_count: 2, enemy_type: MediumAsteroid, min_speed: 1, },
+				{ direction: 3, spawn_count: 2, enemy_type: MediumExplosivesAsteroid, min_speed: 1, },
+			] },
+			{ spawn_interval: 60, max_spawned: 4, wave_spawn_count: 4, batches: [
+				{ direction: 3, spawn_count: 1, enemy_type: LargeAsteroid, min_speed: 1, },
+				{ direction: 3, spawn_count: 4, enemy_type: MediumExplosivesAsteroid, min_speed: 1, },
 			] },
 			// { spawn_interval: 1, max_spawned: 1, wave_spawn_count: 4, batches: [
 			// 	{ spawn_count: 1, enemy_type: LargeAsteroid, min_speed: 0.1, max_speed: 0.1, }
