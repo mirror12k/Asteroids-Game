@@ -322,7 +322,7 @@ function ExplosiveCharge(game, px, py) {
 ExplosiveCharge.prototype = Object.create(ScreenEntity.prototype);
 
 function SteelPlate(game, px, py, path) {
-	ScreenEntity.call(this, game, px, py, 16, 24, game.images.steel_asteroid_plates, path);
+	ScreenEntity.call(this, game, px, py, 24, 24, game.images.steel_asteroid_plates, path);
 	this.max_frame = 4;
 	this.frame = Math.floor(Math.random() * 4);
 }
@@ -431,6 +431,16 @@ MediumSteelAsteroid.prototype.hit = function(game, other) {
 		for (var i = 0; i < count; i++) {
 			var offset = point_offset((360 / count) * i + Math.random() * (360 / count / 2), Math.random() * this.collision_radius * 1.8);
 			game.entities_to_add.push(new Explosion(game, this.px + offset.px, this.py + offset.py, Math.floor(Math.random() * 8)));
+		}
+	}
+
+	for (var i = this.sub_entities.length - 1; i >= 0; i--) {
+		if (Math.random() < 0.4) {
+			var ent = this.sub_entities[i];
+			var offset = d2_point_offset(this.angle, ent.px, ent.py);
+			console.log("debug spawn at", this.px + offset.px, this.py + offset.py);
+			game.particle_systems.steel_plate_particles.add_particle(this.px + offset.px, this.py + offset.py, 3, ent.frame, ent.angle + this.angle);
+			this.sub_entities.splice(i, 1);
 		}
 	}
 };
@@ -917,6 +927,13 @@ function main () {
 			fill_style: '#fd8',
 			particle_size: 8,
 			particle_longevity: 0.2,
+		});
+		game.particle_systems.steel_plate_particles = new ParticleEffectSystem(game, {
+			// particle_image: game.images.particle_effect_generic,
+			particle_image: game.images.steel_asteroid_plates,
+			static_images: true,
+			particle_size: 24,
+			particle_longevity: 0.05,
 		});
 
 
