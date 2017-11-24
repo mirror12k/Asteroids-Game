@@ -862,6 +862,97 @@ function asteroid_entrance(game, asteroid) {
 	return entrances[0];
 }
 
+function DarknessSystem(game) {
+	Entity.call(this, game);
+	this.offset = 0;
+	this.texture = game.images.darkness_texture;
+	this.texture_size = 64;
+}
+DarknessSystem.prototype = Object.create(Entity.prototype);
+DarknessSystem.prototype.update = function(game) {
+	Entity.prototype.update.call(this, game);
+	this.offset = (this.offset + 0.25) % 64;
+	this.player_ship = game.query_entities(PlayerShip)[0];
+};
+DarknessSystem.prototype.draw = function(ctx) {
+	Entity.prototype.draw.call(this, ctx);
+	if (this.visible) {
+		var buffer = this.render(ctx.canvas.width, ctx.canvas.height);
+		if (this.player_ship)
+			this.render_light(buffer, this.player_ship);
+		ctx.drawImage(buffer, 0, 0, ctx.canvas.width, ctx.canvas.height);
+	}
+};
+DarknessSystem.prototype.texture_darkness = function(ctx) {
+	// ctx.fillStyle = '#111';
+	// ctx.fillRect(0,0, ctx.canvas.width, ctx.canvas.height);
+
+	for (var y = -1; y < ctx.canvas.height / this.texture_size; y++) {
+		for (var x = -1; x < ctx.canvas.width / this.texture_size; x++) {
+			ctx.drawImage(this.texture, this.offset + x * this.texture_size, this.offset + y * this.texture_size, this.texture_size, this.texture_size);
+		}
+	}
+};
+DarknessSystem.prototype.render = function(width, height) {
+	var buffer_canvas = document.createElement('canvas');
+	buffer_canvas.width = width;
+	buffer_canvas.height = height;
+	var buffer_context = buffer_canvas.getContext('2d');
+	buffer_context.imageSmoothingEnabled = false;
+
+	this.texture_darkness(buffer_context);
+
+	return buffer_canvas;
+};
+DarknessSystem.prototype.render_light = function(buffer_canvas, player_ship) {
+	var buffer_context = buffer_canvas.getContext('2d');
+
+
+	buffer_context.globalCompositeOperation = "destination-out";
+	buffer_context.fill_style = '#fff';
+
+	for (var x = -1; x <= 1; x++) {
+		var offsetx = x * buffer_canvas.width;
+		for (var y = -1; y <= 1; y++) {
+			var offsety = y * buffer_canvas.height;
+
+			var offset_left = point_offset(player_ship.angle - 30, 300);
+			var offset_right = point_offset(player_ship.angle + 30, 300);
+
+			buffer_context.globalAlpha = 0.5;
+			buffer_context.beginPath();
+			buffer_context.moveTo(offsetx + player_ship.px, offsety + player_ship.py);
+			buffer_context.lineTo(offsetx + player_ship.px + offset_left.px, offsety + player_ship.py + offset_left.py);
+			buffer_context.lineTo(offsetx + player_ship.px + offset_right.px, offsety + player_ship.py + offset_right.py);
+			buffer_context.lineTo(offsetx + player_ship.px, offsety + player_ship.py);
+			buffer_context.fill();
+			
+			buffer_context.beginPath();
+			buffer_context.globalAlpha = 0.5;
+			buffer_context.ellipse(offsetx + player_ship.px, offsety + player_ship.py, 100, 100, 45 * Math.PI/180, 0, 2 * Math.PI);
+			buffer_context.fill();
+
+			var offset_left = point_offset(player_ship.angle - 20, 200);
+			var offset_right = point_offset(player_ship.angle + 20, 200);
+
+			buffer_context.globalAlpha = 1;
+			buffer_context.beginPath();
+			buffer_context.moveTo(offsetx + player_ship.px, offsety + player_ship.py);
+			buffer_context.lineTo(offsetx + player_ship.px + offset_left.px, offsety + player_ship.py + offset_left.py);
+			buffer_context.lineTo(offsetx + player_ship.px + offset_right.px, offsety + player_ship.py + offset_right.py);
+			buffer_context.lineTo(offsetx + player_ship.px, offsety + player_ship.py);
+			buffer_context.fill();
+
+			buffer_context.globalAlpha = 1;
+			buffer_context.beginPath();
+			buffer_context.ellipse(offsetx + player_ship.px, offsety + player_ship.py, 50, 50, 45 * Math.PI/180, 0, 2 * Math.PI);
+			buffer_context.fill();
+		}
+	}
+
+};
+
+
 
 
 function main () {
@@ -882,6 +973,7 @@ function main () {
 		steel_asteroid_base: "steel_asteroid_base.png",
 		steel_asteroid_plates: "steel_asteroid_plates.png",
 
+		darkness_texture: "darkness_texture.png",
 		particle_effect_generic: "particle_effect_generic.png",
 		p9_green_ui: "p9_green_ui.png",
 		warning_sign: "warning_sign.png",
@@ -895,7 +987,7 @@ function main () {
 
 		var game = new GameSystem(canvas, images);
 
-		// game.creep_system = new CreepSystem(game, 640 / 16, 480 / 16);
+		game.game_systems.darkness_system = new DarknessSystem(game);
 		// game.building_system = new BuildingSystem(game, 640 / 16, 480 / 16);
 
 		// game.particle_systems.gas_particles = new ParticleEffectSystem(game, { fill_style: '#202', particle_image: game.images.particle_steam, });
