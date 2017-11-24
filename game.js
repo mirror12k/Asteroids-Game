@@ -458,8 +458,11 @@ function PlayerShip(game, px, py, path) {
 	this.missile_max = 5;
 	this.missile_count = this.missile_max;
 
-	// this.missile_armament = PlayerMissile;
-	this.missile_armament = PlayerExplosiveMissile;
+	this.missile_armament = PlayerMissile;
+	// this.missile_armament = PlayerExplosiveMissile;
+
+	this.entity_tags.push(new PointLightSource());
+	this.entity_tags.push(new DirectedLightSource());
 }
 PlayerShip.prototype = Object.create(WrappingCollidingEntity.prototype);
 PlayerShip.prototype.collision_radius = 8;
@@ -587,6 +590,8 @@ function PlayerMissile(game, px, py, path) {
 	WrappingPathEntity.call(this, game, px, py, 16, 16, game.images.missile, path);
 	this.angle_granularity = 5;
 	this.disable_wrapping_first_time = false;
+
+	// this.entity_tags.push(new PointLightSource());
 }
 PlayerMissile.prototype = Object.create(WrappingPathEntity.prototype);
 PlayerMissile.prototype.collision_radius = 4;
@@ -602,6 +607,8 @@ function PlayerExplosiveMissile(game, px, py, path) {
 	WrappingPathEntity.call(this, game, px, py, 40, 16, game.images.explosive_missile, path);
 	this.angle_granularity = 5;
 	this.disable_wrapping_first_time = false;
+
+	// this.entity_tags.push(new PointLightSource());
 }
 PlayerExplosiveMissile.prototype = Object.create(PlayerMissile.prototype);
 PlayerExplosiveMissile.prototype.collision_radius = 8;
@@ -862,6 +869,9 @@ function asteroid_entrance(game, asteroid) {
 	return entrances[0];
 }
 
+function PointLightSource() {}
+function DirectedLightSource() {}
+
 function DarknessSystem(game) {
 	Entity.call(this, game);
 	this.offset = 0;
@@ -872,14 +882,16 @@ DarknessSystem.prototype = Object.create(Entity.prototype);
 DarknessSystem.prototype.update = function(game) {
 	Entity.prototype.update.call(this, game);
 	this.offset = (this.offset + 0.25) % 64;
-	this.player_ship = game.query_entities(PlayerShip)[0];
+	this.point_light_sources = game.query_entities_by_tag(Entity, PointLightSource);
+	this.directed_light_sources = game.query_entities_by_tag(Entity, DirectedLightSource);
+	// console.log("debug point_light_sources:", this.point_light_sources);
+	// this.player_ship = game.query_entities(PlayerShip)[0];
 };
 DarknessSystem.prototype.draw = function(ctx) {
 	Entity.prototype.draw.call(this, ctx);
 	if (this.visible) {
 		var buffer = this.render(ctx.canvas.width, ctx.canvas.height);
-		if (this.player_ship)
-			this.render_light(buffer, this.player_ship);
+		this.render_light(buffer, this.point_light_sources, this.directed_light_sources);
 		ctx.drawImage(buffer, 0, 0, ctx.canvas.width, ctx.canvas.height);
 	}
 };
@@ -904,9 +916,8 @@ DarknessSystem.prototype.render = function(width, height) {
 
 	return buffer_canvas;
 };
-DarknessSystem.prototype.render_light = function(buffer_canvas, player_ship) {
+DarknessSystem.prototype.render_light = function(buffer_canvas, point_light_sources, directed_light_sources) {
 	var buffer_context = buffer_canvas.getContext('2d');
-
 
 	buffer_context.globalCompositeOperation = "destination-out";
 	buffer_context.fill_style = '#fff';
@@ -916,37 +927,58 @@ DarknessSystem.prototype.render_light = function(buffer_canvas, player_ship) {
 		for (var y = -1; y <= 1; y++) {
 			var offsety = y * buffer_canvas.height;
 
-			var offset_left = point_offset(player_ship.angle - 30, 300);
-			var offset_right = point_offset(player_ship.angle + 30, 300);
+			for (var i = 0; i < directed_light_sources.length; i++) {
+				var source = directed_light_sources[i];
 
-			buffer_context.globalAlpha = 0.5;
-			buffer_context.beginPath();
-			buffer_context.moveTo(offsetx + player_ship.px, offsety + player_ship.py);
-			buffer_context.lineTo(offsetx + player_ship.px + offset_left.px, offsety + player_ship.py + offset_left.py);
-			buffer_context.lineTo(offsetx + player_ship.px + offset_right.px, offsety + player_ship.py + offset_right.py);
-			buffer_context.lineTo(offsetx + player_ship.px, offsety + player_ship.py);
-			buffer_context.fill();
-			
-			buffer_context.beginPath();
-			buffer_context.globalAlpha = 0.5;
-			buffer_context.ellipse(offsetx + player_ship.px, offsety + player_ship.py, 100, 100, 45 * Math.PI/180, 0, 2 * Math.PI);
-			buffer_context.fill();
+				var offset_left = point_offset(source.angle - 30, 275);
+				var offset_right = point_offset(source.angle + 30, 275);
 
-			var offset_left = point_offset(player_ship.angle - 20, 200);
-			var offset_right = point_offset(player_ship.angle + 20, 200);
+				buffer_context.globalAlpha = 0.7;
+				buffer_context.beginPath();
+				buffer_context.moveTo(offsetx + source.px, offsety + source.py);
+				buffer_context.lineTo(offsetx + source.px + offset_left.px, offsety + source.py + offset_left.py);
+				buffer_context.lineTo(offsetx + source.px + offset_right.px, offsety + source.py + offset_right.py);
+				buffer_context.lineTo(offsetx + source.px, offsety + source.py);
+				buffer_context.fill();
+			}
 
-			buffer_context.globalAlpha = 1;
-			buffer_context.beginPath();
-			buffer_context.moveTo(offsetx + player_ship.px, offsety + player_ship.py);
-			buffer_context.lineTo(offsetx + player_ship.px + offset_left.px, offsety + player_ship.py + offset_left.py);
-			buffer_context.lineTo(offsetx + player_ship.px + offset_right.px, offsety + player_ship.py + offset_right.py);
-			buffer_context.lineTo(offsetx + player_ship.px, offsety + player_ship.py);
-			buffer_context.fill();
+			for (var i = 0; i < point_light_sources.length; i++) {
+				var source = point_light_sources[i];
+				buffer_context.beginPath();
+				buffer_context.globalAlpha = 0.7;
+				buffer_context.ellipse(offsetx + source.px, offsety + source.py, 75, 75, 45 * Math.PI/180, 0, 2 * Math.PI);
+				buffer_context.fill();
+			}
+		}
+	}
 
-			buffer_context.globalAlpha = 1;
-			buffer_context.beginPath();
-			buffer_context.ellipse(offsetx + player_ship.px, offsety + player_ship.py, 50, 50, 45 * Math.PI/180, 0, 2 * Math.PI);
-			buffer_context.fill();
+	for (var x = -1; x <= 1; x++) {
+		var offsetx = x * buffer_canvas.width;
+		for (var y = -1; y <= 1; y++) {
+			var offsety = y * buffer_canvas.height;
+
+			for (var i = 0; i < directed_light_sources.length; i++) {
+				var source = directed_light_sources[i];
+
+				var offset_left = point_offset(source.angle - 20, 200);
+				var offset_right = point_offset(source.angle + 20, 200);
+
+				buffer_context.globalAlpha = 1;
+				buffer_context.beginPath();
+				buffer_context.moveTo(offsetx + source.px, offsety + source.py);
+				buffer_context.lineTo(offsetx + source.px + offset_left.px, offsety + source.py + offset_left.py);
+				buffer_context.lineTo(offsetx + source.px + offset_right.px, offsety + source.py + offset_right.py);
+				buffer_context.lineTo(offsetx + source.px, offsety + source.py);
+				buffer_context.fill();
+			}
+
+			for (var i = 0; i < point_light_sources.length; i++) {
+				var source = point_light_sources[i];
+				buffer_context.beginPath();
+				buffer_context.globalAlpha = 1;
+				buffer_context.ellipse(offsetx + source.px, offsety + source.py, 50, 50, 45 * Math.PI/180, 0, 2 * Math.PI);
+				buffer_context.fill();
+			}
 		}
 	}
 
