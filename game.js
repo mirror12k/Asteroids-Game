@@ -347,6 +347,8 @@ Explosion.prototype.update = function(game) {
 	if (this.frame >= this.max_frame) {
 		game.entities_to_remove.push(this);
 	}
+
+	game.game_systems.debug_system.add_debug_square(this, this.collision_radius * 2);
 };
 Explosion.prototype.hit_player = function(game, other) {
 	game.entities_to_remove.push(other);
@@ -458,11 +460,11 @@ function PlayerShip(game, px, py, path) {
 	this.missile_max = 5;
 	this.missile_count = this.missile_max;
 
-	this.missile_armament = PlayerMissile;
-	// this.missile_armament = PlayerExplosiveMissile;
+	// this.missile_armament = PlayerMissile;
+	this.missile_armament = PlayerExplosiveMissile;
 
-	this.entity_tags.push(new PointLightSource());
-	this.entity_tags.push(new DirectedLightSource());
+	this.entity_tags.push(new PointLightSourceTag());
+	this.entity_tags.push(new DirectedLightSourceTag());
 }
 PlayerShip.prototype = Object.create(WrappingCollidingEntity.prototype);
 PlayerShip.prototype.collision_radius = 8;
@@ -473,6 +475,7 @@ PlayerShip.prototype.collision_map = [
 	// },
 ];
 PlayerShip.prototype.update = function(game) {
+	// input reading to adjust actions
 	if (game.keystate.Q) {
 		this.angle -= 2;
 		this.angle %= 360;
@@ -524,6 +527,7 @@ PlayerShip.prototype.update = function(game) {
 		game.particle_systems.fire_particles.add_particle(this.px + offset.px, this.py + offset.py, 1);
 	}
 
+	// movement physics
 	if (point_dist(this.sx, this.sy) > 5) {
 		var speed = point_normal(this.sx, this.sy);
 		this.sx = speed.px * 5;
@@ -533,7 +537,13 @@ PlayerShip.prototype.update = function(game) {
 	this.px += this.sx;
 	this.py += this.sy;
 
+	if (this.get_tag(EquipedExplosiveMissilesTag)) {
+		this.missile_armament = PlayerExplosiveMissile;
+	} else {
+		this.missile_armament = PlayerMissile;
+	}
 
+	// reloading logic
 	if (this.missile_count < this.missile_max) {
 		if (this.reload_timer) {
 			this.reload_timer--;
@@ -543,6 +553,7 @@ PlayerShip.prototype.update = function(game) {
 		}
 	}
 
+	// check input and fire missile
 	if (this.fire_timer) {
 		this.fire_timer--;
 	} else {
@@ -552,7 +563,6 @@ PlayerShip.prototype.update = function(game) {
 			this.fire_timer = 5;
 		}
 	}
-
 	this.last_space_input = game.keystate[' '];
 
 	WrappingCollidingEntity.prototype.update.call(this, game);
@@ -591,7 +601,7 @@ function PlayerMissile(game, px, py, path) {
 	this.angle_granularity = 5;
 	this.disable_wrapping_first_time = false;
 
-	// this.entity_tags.push(new PointLightSource());
+	// this.entity_tags.push(new PointLightSourceTag());
 }
 PlayerMissile.prototype = Object.create(WrappingPathEntity.prototype);
 PlayerMissile.prototype.collision_radius = 4;
@@ -608,7 +618,7 @@ function PlayerExplosiveMissile(game, px, py, path) {
 	this.angle_granularity = 5;
 	this.disable_wrapping_first_time = false;
 
-	// this.entity_tags.push(new PointLightSource());
+	// this.entity_tags.push(new PointLightSourceTag());
 }
 PlayerExplosiveMissile.prototype = Object.create(PlayerMissile.prototype);
 PlayerExplosiveMissile.prototype.collision_radius = 8;
@@ -726,7 +736,7 @@ UIMissileDisplay.prototype.update = function(game) {
 function UIWarningSign(game, px, py) {
 	ScreenEntity.call(this, game, px, py, 32, 32, game.images.warning_sign);
 	this.blink = 60;
-	this.blink_count = 5;
+	this.blink_count = 3;
 }
 UIWarningSign.prototype = Object.create(ScreenEntity.prototype);
 UIWarningSign.prototype.update = function(game) {
@@ -735,7 +745,7 @@ UIWarningSign.prototype.update = function(game) {
 	if (this.blink < 0) {
 		this.blink_count--;
 		if (this.blink_count <= 0)
-			game.entities_to_remove.push(this);
+			game.remove_entity(this);
 		else
 			this.blink = 60;
 	}
@@ -775,6 +785,12 @@ NPCDirectorEntity.prototype.update = function(game) {
 };
 NPCDirectorEntity.prototype.start_next_wave = function(game) {
 	if (this.wave_index < this.waves.length) {
+		// clear tags from previous wave
+		if (this.wave_index > 0 && this.waves[this.wave_index-1].wave_tags) {
+			for (var i = 0; i < this.waves[this.wave_index-1].wave_tags.length; i++) {
+				this.remove_tag(this.waves[this.wave_index-1].wave_tags[i]);
+			}
+		}
 		this.start_wave(game, this.waves[this.wave_index]);
 		this.wave_index++;
 	} else {
@@ -790,6 +806,12 @@ NPCDirectorEntity.prototype.start_wave = function(game, wave) {
 	this.wave_spawn_count = wave.wave_spawn_count || 10;
 	this.batches = wave.batches;
 	this.pre_rest = wave.pre_rest || 0;
+
+	if (wave.wave_tags) {
+		for (var i = 0; i < wave.wave_tags.length; i++) {
+			this.entity_tags.push(wave.wave_tags[i]);
+		}
+	}
 };
 NPCDirectorEntity.prototype.spawn_batch = function(game, batch) {
 	var direction = batch.direction;
@@ -827,7 +849,7 @@ NPCDirectorEntity.prototype.spawn_batch = function(game, batch) {
 		var entrance_position = asteroid_entrance(game, asteroid);
 		if (entrance_position) {
 			entrance_position = border_point(game, entrance_position, 16);
-			game.entities.push(new UIWarningSign(game, entrance_position.px, entrance_position.py));
+			game.game_systems.ui_container.sub_entities.push(new UIWarningSign(game, entrance_position.px, entrance_position.py));
 		}
 	}
 };
@@ -869,30 +891,58 @@ function asteroid_entrance(game, asteroid) {
 	return entrances[0];
 }
 
-function PointLightSource() {}
-function DirectedLightSource() {}
+// tag for player entity to equip explosive missiles
+function EquipedExplosiveMissilesTag() {
+	this.timer = 60 * 30; // 30 seconds of explosive missiles
+}
+
+// tag for director entity to enable darkness
+function EnableDarknessTag() {}
+
+// tag indicates that entity is source of point light
+function PointLightSourceTag() {}
+// tag indicates that entity is source of directed light
+function DirectedLightSourceTag() {}
 
 function DarknessSystem(game) {
 	Entity.call(this, game);
 	this.offset = 0;
 	this.texture = game.images.darkness_texture;
 	this.texture_size = 64;
+
+	this.darkness_level = 0;
 }
 DarknessSystem.prototype = Object.create(Entity.prototype);
 DarknessSystem.prototype.update = function(game) {
 	Entity.prototype.update.call(this, game);
 	this.offset = (this.offset + 0.25) % 64;
-	this.point_light_sources = game.query_entities_by_tag(Entity, PointLightSource);
-	this.directed_light_sources = game.query_entities_by_tag(Entity, DirectedLightSource);
+	this.point_light_sources = game.query_entities_by_tag(Entity, PointLightSourceTag);
+	this.directed_light_sources = game.query_entities_by_tag(Entity, DirectedLightSourceTag);
 	// console.log("debug point_light_sources:", this.point_light_sources);
 	// this.player_ship = game.query_entities(PlayerShip)[0];
+
+	if (game.game_systems.npc_director.get_tag(EnableDarknessTag)) {
+		if (this.darkness_level < 1) {
+			this.darkness_level += 0.002;
+		}
+	} else {
+		if (this.darkness_level > 0) {
+			this.darkness_level -= 0.002;
+		}
+	}
 };
 DarknessSystem.prototype.draw = function(ctx) {
 	Entity.prototype.draw.call(this, ctx);
-	if (this.visible) {
+	if (this.visible && this.darkness_level > 0.1) {
+		ctx.save();
+
+		ctx.globalAlpha = Math.floor(this.darkness_level / 0.1) * 0.1;
+
 		var buffer = this.render(ctx.canvas.width, ctx.canvas.height);
 		this.render_light(buffer, this.point_light_sources, this.directed_light_sources);
 		ctx.drawImage(buffer, 0, 0, ctx.canvas.width, ctx.canvas.height);
+
+		ctx.restore();
 	}
 };
 DarknessSystem.prototype.texture_darkness = function(ctx) {
@@ -981,8 +1031,14 @@ DarknessSystem.prototype.render_light = function(buffer_canvas, point_light_sour
 			}
 		}
 	}
-
 };
+
+
+function UIContainer(game) {
+	Entity.call(this, game);
+	this.z_index = 1000;
+}
+UIContainer.prototype = Object.create(Entity.prototype);
 
 
 
@@ -1020,7 +1076,57 @@ function main () {
 		var game = new GameSystem(canvas, images);
 
 		game.game_systems.darkness_system = new DarknessSystem(game);
-		// game.building_system = new BuildingSystem(game, 640 / 16, 480 / 16);
+		game.game_systems.ui_container = new UIContainer(game);
+
+		game.game_systems.debug_system = new DebugSystem(game);
+		game.game_systems.debug_system.visible = false;
+		game.game_systems.debug_system.add_debug_text({
+			update: function (game) {
+				this.text = "# entities: " + game.entities.length;
+			},
+		});
+		game.game_systems.debug_system.add_debug_text({
+			text: "asteroids:",
+			update: function (game) {
+				this.rays = [];
+				var asteroids = game.query_entities(Asteroid);
+				for (var i = 0; i < asteroids.length; i++) {
+					this.rays.push(asteroids[i]);
+				}
+			},
+		});
+
+		game.game_systems.npc_director = new NPCDirectorEntity(game, [
+			{ spawn_interval: 60, max_spawned: 5, max_spawned_to_end: 2, wave_spawn_count: 4, batches: [
+				{ spawn_count: 1, enemy_type: MediumAsteroid, min_speed: 0.5, },
+			] },
+			{ spawn_interval: 60, max_spawned: 8, max_spawned_to_end: 4, wave_spawn_count: 4, batches: [
+				{ direction: 2, spawn_count: 2, enemy_type: MediumAsteroid, min_speed: 1, },
+				{ direction: 2, spawn_count: 1, enemy_type: MediumSteelAsteroid, min_speed: 1, },
+			] },
+			{ spawn_interval: 60, wave_spawn_count: 1, max_spawned_to_end: 4, wave_tags: [ new EnableDarknessTag() ], batches: [
+				{ spawn_count: 1, enemy_type: LargeAsteroid, max_speed: 2, },
+			] },
+			{ spawn_interval: 120, max_spawned: 6, max_spawned_to_end: 6, wave_spawn_count: 2, batches: [
+				{ direction: 0, spawn_count: 4, enemy_type: SmallAsteroid, },
+				{ direction: 1, spawn_count: 4, enemy_type: SmallAsteroid, },
+				{ direction: 2, spawn_count: 4, enemy_type: SmallAsteroid, },
+				{ direction: 3, spawn_count: 4, enemy_type: SmallAsteroid, },
+				{ spawn_count: 1, enemy_type: MediumExplosivesAsteroid, min_speed: 1, },
+			] },
+			{ spawn_interval: 60, max_spawned: 4, wave_spawn_count: 4, batches: [
+				{ spawn_count: 1, enemy_type: LargeAsteroid, min_speed: 1, },
+				{ spawn_count: 4, enemy_type: MediumExplosivesAsteroid, min_speed: 1, },
+			] },
+			{ spawn_interval: 120, max_spawned: 4, wave_spawn_count: 1, wave_tags: [ new EnableDarknessTag() ], batches: [
+				{ spawn_count: 4, enemy_type: MediumSteelAsteroid, min_speed: 1, },
+			] },
+			{ spawn_interval: 120, max_spawned: 4, wave_spawn_count: 4, wave_tags: [ new EnableDarknessTag() ], batches: [
+				{ spawn_count: 2, enemy_type: MediumSteelAsteroid, min_speed: 1.5, },
+				{ spawn_count: 2, enemy_type: MediumAsteroid, min_speed: 1, },
+				{ spawn_count: 1, enemy_type: MediumExplosivesAsteroid, min_speed: 1, },
+			] },
+		]);
 
 		// game.particle_systems.gas_particles = new ParticleEffectSystem(game, { fill_style: '#202', particle_image: game.images.particle_steam, });
 
@@ -1029,36 +1135,7 @@ function main () {
 		// // game.entities.push(new XHive(game, 16 * 5 + 48 / 2, 16 * 5 + 48 / 2));
 		var player_ship = new PlayerShip(game, 300, 300);
 		game.entities.push(player_ship);
-		game.entities.push(new UIMissileDisplay(game, 8 * 12 / 2 + 16, 480 - 4 * 8 / 2 - 16, player_ship));
-		game.entities.push(new NPCDirectorEntity(game, [
-			{ spawn_interval: 60, max_spawned: 8, max_spawned_to_end: 4, wave_spawn_count: 4, batches: [
-				{ direction: 2, spawn_count: 2, enemy_type: MediumAsteroid, min_speed: 1, },
-			] },
-			{ spawn_interval: 60, wave_spawn_count: 1, batches: [
-				{ spawn_count: 1, enemy_type: LargeAsteroid, max_speed: 2, },
-				{ spawn_count: 1, enemy_type: MediumExplosivesAsteroid, max_speed: 0.5, },
-			] },
-			{ spawn_interval: 60, wave_spawn_count: 1, batches: [
-				{ spawn_count: 1, enemy_type: LargeAsteroid, max_speed: 2, },
-			] },
-			{ spawn_interval: 120, max_spawned: 6, max_spawned_to_end: 6, wave_spawn_count: 1, batches: [
-				{ direction: 0, spawn_count: 4, enemy_type: SmallAsteroid, },
-				{ direction: 1, spawn_count: 4, enemy_type: SmallAsteroid, },
-				{ direction: 2, spawn_count: 4, enemy_type: SmallAsteroid, },
-				{ direction: 3, spawn_count: 4, enemy_type: SmallAsteroid, },
-			] },
-			{ spawn_interval: 60, max_spawned: 4, max_spawned_to_end: 2, wave_spawn_count: 4, batches: [
-				{ direction: 3, spawn_count: 2, enemy_type: MediumAsteroid, min_speed: 1, },
-				{ direction: 3, spawn_count: 2, enemy_type: MediumExplosivesAsteroid, min_speed: 1, },
-			] },
-			{ spawn_interval: 60, max_spawned: 4, wave_spawn_count: 4, batches: [
-				{ direction: 3, spawn_count: 1, enemy_type: LargeAsteroid, min_speed: 1, },
-				{ direction: 3, spawn_count: 4, enemy_type: MediumExplosivesAsteroid, min_speed: 1, },
-			] },
-			{ spawn_interval: 60, max_spawned: 4, wave_spawn_count: 4, batches: [
-				{ direction: 3, spawn_count: 4, enemy_type: MediumSteelAsteroid, min_speed: 1, },
-			] },
-		]));
+		game.game_systems.ui_container.sub_entities.push(new UIMissileDisplay(game, 8 * 12 / 2 + 16, 480 - 4 * 8 / 2 - 16, player_ship));
 
 
 		// var asteroid = new SmallAsteroid(game, 800, 200,
