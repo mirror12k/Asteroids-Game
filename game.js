@@ -358,6 +358,47 @@ Explosion.prototype.hit_player = function(game, other) {
 	}
 };
 
+function EMPExplosion(game, px, py, animation_offset) {
+	var size_factor = 1 + Math.random() * 2;
+	WrappingCollidingEntity.call(this, game, px, py, 128 * size_factor, 128 * size_factor, game.images.emp_explosion);
+	this.angle = Math.random() * 360;
+	this.animation_index = animation_offset;
+	this.max_frame = 6;
+
+	this.collision_radius = 128 * size_factor / 2;
+}
+EMPExplosion.prototype = Object.create(WrappingCollidingEntity.prototype);
+EMPExplosion.prototype.collision_radius = 32;
+EMPExplosion.prototype.collision_map = [
+	{
+		class: PlayerShip,
+		callback: 'hit_player',
+	},
+];
+EMPExplosion.prototype.update = function(game) {
+	WrappingCollidingEntity.prototype.update.call(this, game);
+	this.animation_index++;
+	this.frame = Math.floor(this.animation_index / 4);
+	if (this.frame >= this.max_frame) {
+		game.entities_to_remove.push(this);
+	}
+
+	game.game_systems.debug_system.add_debug_square(this, this.collision_radius * 2);
+};
+EMPExplosion.prototype.hit_player = function(game, other) {
+	var tag = other.get_tag(EMPStatusEffectTag);
+	if (tag) {
+		tag.timer = 90;
+	} else {
+		other.entity_tags.push(new EMPStatusEffectTag());
+	}
+	// game.entities_to_remove.push(other);
+	// // spawn rocket explosion particles
+	// for (var i = 0; i < 25; i++) {
+	// 	game.particle_systems.fire_particles.add_particle(other.px, other.py, 4);
+	// }
+};
+
 function MediumAsteroid(game, px, py, path) {
 	Asteroid.call(this, game, px, py, path);
 	this.width = 64;
@@ -414,6 +455,23 @@ ExplosiveMine.prototype.hit = function(game, other) {
 	for (var i = 0; i < count; i++) {
 		var offset = point_offset((360 / count) * i + Math.random() * (360 / count / 2), Math.random() * this.collision_radius * 1.8);
 		game.entities_to_add.push(new Explosion(game, this.px + offset.px, this.py + offset.py, Math.floor(Math.random() * 8)));
+	}
+};
+
+function EMPMine(game, px, py, path) {
+	Asteroid.call(this, game, px, py, path);
+	this.image = game.images.emp_mine;
+	this.width = 32;
+	this.height = 32;
+}
+EMPMine.prototype = Object.create(Asteroid.prototype);
+EMPMine.prototype.collision_radius = 20;
+EMPMine.prototype.hit = function(game, other) {
+	Asteroid.prototype.hit.call(this, game, other);
+	var count = 1;
+	for (var i = 0; i < count; i++) {
+		var offset = point_offset((360 / count) * i + Math.random() * (360 / count / 2), Math.random() * this.collision_radius * 1.8);
+		game.entities_to_add.push(new EMPExplosion(game, this.px + offset.px, this.py + offset.py, Math.floor(Math.random() * 8)));
 	}
 };
 
@@ -492,56 +550,59 @@ PlayerShip.prototype.collision_map = [
 	// },
 ];
 PlayerShip.prototype.update = function(game) {
-	// input reading to adjust actions
-	if (game.keystate.Q) {
-		this.angle -= 2;
-		this.angle %= 360;
-	}
-	if (game.keystate.E) {
-		this.angle += 2;
-		this.angle %= 360;
-	}
-	if (game.keystate.A) {
-		var offset = point_offset(this.angle - 90, 0.05);
-		this.sx += offset.px;
-		this.sy += offset.py;
-	}
-	if (game.keystate.D) {
-		var offset = point_offset(this.angle + 90, 0.05);
-		this.sx += offset.px;
-		this.sy += offset.py;
-	}
+	// if we arent affected by emp, check input
+	if (!this.get_tag(EMPStatusEffectTag)) {
+		// input reading to adjust actions
+		if (game.keystate.Q) {
+			this.angle -= 2;
+			this.angle %= 360;
+		}
+		if (game.keystate.E) {
+			this.angle += 2;
+			this.angle %= 360;
+		}
+		if (game.keystate.A) {
+			var offset = point_offset(this.angle - 90, 0.05);
+			this.sx += offset.px;
+			this.sy += offset.py;
+		}
+		if (game.keystate.D) {
+			var offset = point_offset(this.angle + 90, 0.05);
+			this.sx += offset.px;
+			this.sy += offset.py;
+		}
 
-	if (game.keystate.W) {
-		var offset = point_offset(this.angle, 0.10);
-		this.sx += offset.px;
-		this.sy += offset.py;
-	}
-	if (game.keystate.S) {
-		var offset = point_offset(this.angle + 180, 0.05);
-		this.sx += offset.px;
-		this.sy += offset.py;
-	}
+		if (game.keystate.W) {
+			var offset = point_offset(this.angle, 0.10);
+			this.sx += offset.px;
+			this.sy += offset.py;
+		}
+		if (game.keystate.S) {
+			var offset = point_offset(this.angle + 180, 0.05);
+			this.sx += offset.px;
+			this.sy += offset.py;
+		}
 
-	if (game.keystate.W) {
-		var offset = d2_point_offset(this.angle, -this.width / 2, -this.height / 8);
-		game.particle_systems.fire_particles.add_particle(this.px + offset.px, this.py + offset.py, 1);
-		offset = d2_point_offset(this.angle, -this.width / 2, this.height / 8);
-		game.particle_systems.fire_particles.add_particle(this.px + offset.px, this.py + offset.py, 1);
-	}
-	if (game.keystate.S) {
-		var offset = d2_point_offset(this.angle, this.width / 4, -this.height / 8);
-		game.particle_systems.fire_particles.add_particle(this.px + offset.px, this.py + offset.py, 1);
-		offset = d2_point_offset(this.angle, this.width / 4, this.height / 8);
-		game.particle_systems.fire_particles.add_particle(this.px + offset.px, this.py + offset.py, 1);
-	}
-	if (game.keystate.A) {
-		var offset = d2_point_offset(this.angle, -this.width / 4, this.height / 2);
-		game.particle_systems.fire_particles.add_particle(this.px + offset.px, this.py + offset.py, 1);
-	}
-	if (game.keystate.D) {
-		var offset = d2_point_offset(this.angle, -this.width / 4, -this.height / 2);
-		game.particle_systems.fire_particles.add_particle(this.px + offset.px, this.py + offset.py, 1);
+		if (game.keystate.W) {
+			var offset = d2_point_offset(this.angle, -this.width / 2, -this.height / 8);
+			game.particle_systems.fire_particles.add_particle(this.px + offset.px, this.py + offset.py, 1);
+			offset = d2_point_offset(this.angle, -this.width / 2, this.height / 8);
+			game.particle_systems.fire_particles.add_particle(this.px + offset.px, this.py + offset.py, 1);
+		}
+		if (game.keystate.S) {
+			var offset = d2_point_offset(this.angle, this.width / 4, -this.height / 8);
+			game.particle_systems.fire_particles.add_particle(this.px + offset.px, this.py + offset.py, 1);
+			offset = d2_point_offset(this.angle, this.width / 4, this.height / 8);
+			game.particle_systems.fire_particles.add_particle(this.px + offset.px, this.py + offset.py, 1);
+		}
+		if (game.keystate.A) {
+			var offset = d2_point_offset(this.angle, -this.width / 4, this.height / 2);
+			game.particle_systems.fire_particles.add_particle(this.px + offset.px, this.py + offset.py, 1);
+		}
+		if (game.keystate.D) {
+			var offset = d2_point_offset(this.angle, -this.width / 4, -this.height / 2);
+			game.particle_systems.fire_particles.add_particle(this.px + offset.px, this.py + offset.py, 1);
+		}
 	}
 
 	// movement physics
@@ -913,6 +974,11 @@ function EquipedExplosiveMissilesTag() {
 	this.timer = 60 * 30; // 30 seconds of explosive missiles
 }
 
+// tag for player entity to disable controls during emp
+function EMPStatusEffectTag() {
+	this.timer = 60 * 1.5; // 1.5 seconds of emp
+}
+
 // tag for director entity to enable darkness
 function EnableDarknessTag() {}
 
@@ -1075,9 +1141,11 @@ function main () {
 		asteroid_64: "asteroid_64.png",
 		explosive_charge: "explosive_charge.png",
 		explosion: "explosion.png",
+		emp_explosion: "emp_explosion.png",
 		steel_asteroid_base: "steel_asteroid_base.png",
 		steel_asteroid_plates: "steel_asteroid_plates.png",
 		explosive_mine: "explosive_mine.png",
+		emp_mine: "emp_mine.png",
 
 		darkness_texture: "darkness_texture.png",
 		particle_effect_generic: "particle_effect_generic.png",
@@ -1115,27 +1183,28 @@ function main () {
 		});
 
 		game.game_systems.npc_director = new NPCDirectorEntity(game, [
-			// { spawn_interval: 60, max_spawned: 5, max_spawned_to_end: 2, wave_spawn_count: 4, batches: [
-			// 	{ spawn_count: 1, enemy_type: MediumAsteroid, min_speed: 0.5, },
-			// ] },
-			// { spawn_interval: 60, max_spawned: 8, max_spawned_to_end: 4, wave_spawn_count: 4, batches: [
-			// 	{ direction: 2, spawn_count: 2, enemy_type: MediumAsteroid, min_speed: 1, },
-			// 	{ direction: 2, spawn_count: 1, enemy_type: MediumSteelAsteroid, min_speed: 1, },
-			// ] },
-			// { spawn_interval: 60, wave_spawn_count: 1, max_spawned_to_end: 2, wave_tags: [ new EnableDarknessTag() ], batches: [
-			// 	{ spawn_count: 1, enemy_type: LargeAsteroid, max_speed: 2, },
-			// ] },
-			// { spawn_interval: 120, max_spawned: 6, max_spawned_to_end: 6, wave_spawn_count: 2, wave_tags: [ new EnableDarknessTag() ], batches: [
-			// 	{ direction: 0, spawn_count: 4, enemy_type: SmallAsteroid, },
-			// 	{ direction: 1, spawn_count: 4, enemy_type: SmallAsteroid, },
-			// 	{ direction: 2, spawn_count: 4, enemy_type: SmallAsteroid, },
-			// 	{ direction: 3, spawn_count: 4, enemy_type: SmallAsteroid, },
-			// 	{ spawn_count: 1, enemy_type: MediumExplosivesAsteroid, min_speed: 1, },
-			// ] },
-			// { spawn_interval: 60, max_spawned: 4, wave_spawn_count: 4, batches: [
-			// 	{ spawn_count: 1, enemy_type: LargeAsteroid, min_speed: 1, },
-			// 	{ spawn_count: 4, enemy_type: MediumExplosivesAsteroid, min_speed: 1, },
-			// ] },
+			{ spawn_interval: 60, max_spawned: 5, max_spawned_to_end: 2, wave_spawn_count: 4, batches: [
+				{ spawn_count: 1, enemy_type: MediumAsteroid, min_speed: 0.5, },
+			] },
+			{ spawn_interval: 60, max_spawned: 8, max_spawned_to_end: 4, wave_spawn_count: 4, batches: [
+				{ direction: 2, spawn_count: 2, enemy_type: MediumAsteroid, min_speed: 1, },
+				{ direction: 2, spawn_count: 1, enemy_type: MediumSteelAsteroid, min_speed: 1, },
+			] },
+			{ spawn_interval: 60, wave_spawn_count: 1, max_spawned_to_end: 2, wave_tags: [ new EnableDarknessTag() ], batches: [
+				{ spawn_count: 1, enemy_type: LargeAsteroid, max_speed: 2, },
+			] },
+			{ spawn_interval: 120, max_spawned: 6, max_spawned_to_end: 6, wave_spawn_count: 2, wave_tags: [ new EnableDarknessTag() ], batches: [
+				{ direction: 0, spawn_count: 4, enemy_type: SmallAsteroid, },
+				{ direction: 1, spawn_count: 4, enemy_type: SmallAsteroid, },
+				{ direction: 2, spawn_count: 4, enemy_type: SmallAsteroid, },
+				{ direction: 3, spawn_count: 4, enemy_type: SmallAsteroid, },
+				{ spawn_count: 1, enemy_type: MediumExplosivesAsteroid, min_speed: 1, },
+			] },
+			{ spawn_interval: 60, max_spawned: 4, wave_spawn_count: 4, batches: [
+				{ spawn_count: 1, enemy_type: LargeAsteroid, min_speed: 1, },
+				{ spawn_count: 4, enemy_type: MediumExplosivesAsteroid, min_speed: 1, },
+				{ spawn_count: 2, enemy_type: EMPMine, min_speed: 0.25, },
+			] },
 			{ spawn_interval: 120, max_spawned: 4, wave_spawn_count: 2, max_spawned_to_end: 2, wave_tags: [ new EnableDarknessTag() ], batches: [
 				{ spawn_count: 4, enemy_type: MediumSteelAsteroid, min_speed: 1, },
 				{ spawn_count: 4, enemy_type: ExplosiveMine, min_speed: 0.25, },

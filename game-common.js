@@ -572,7 +572,7 @@ Entity.prototype.update = function(game) {
 	for (var i = this.entity_tags.length - 1; i >= 0; i--) {
 		if (this.entity_tags[i].timer !== undefined) {
 			this.entity_tags[i].timer--;
-			if (this.entity_tags[i] <= 0) {
+			if (this.entity_tags[i].timer <= 0) {
 				this.entity_tags.splice(i, 1);
 			}
 		}
