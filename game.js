@@ -238,7 +238,7 @@ WrappingCollidingEntity.prototype.check_collision = function(game) {
 	for (var i = 0; i < this.collision_map.length; i++) {
 		// console.log("debug: ", this.collision_radius + this.collision_map[i].class.prototype.collision_radius);
 		// var colliding = game.find_near(this, this.collision_map[i].class, this.collision_radius + this.collision_map[i].class.prototype.collision_radius);
-		var colliding = game.find_colliding(this, this.collision_map[i].class, this.collision_radius);
+		var colliding = game.find_colliding_circular(this, this.collision_map[i].class, this.collision_radius);
 		for (var k = 0; k < colliding.length; k++) {
 			this[this.collision_map[i].callback](game, colliding[k]);
 		}
@@ -313,7 +313,7 @@ LargeAsteroid.prototype.hit = function(game, other) {
 };
 
 function ExplosiveCharge(game, px, py) {
-	ScreenEntity.call(this, game, px, py, 8, 8, game.images.explosive_charge);
+	ScreenEntity.call(this, game, px, py, 12, 12, game.images.explosive_charge);
 	this.angle = Math.random() * 360;
 }
 ExplosiveCharge.prototype = Object.create(ScreenEntity.prototype);
@@ -996,7 +996,7 @@ DarknessSystem.prototype.render_light = function(buffer_canvas, point_light_sour
 				var source = point_light_sources[i];
 				buffer_context.beginPath();
 				buffer_context.globalAlpha = 0.7;
-				buffer_context.ellipse(offsetx + source.px, offsety + source.py, 75, 75, 45 * Math.PI/180, 0, 2 * Math.PI);
+				buffer_context.ellipse(offsetx + source.px, offsety + source.py, 100, 100, 45 * Math.PI/180, 0, 2 * Math.PI);
 				buffer_context.fill();
 			}
 		}
@@ -1073,7 +1073,7 @@ function main () {
 		console.log("all images loaded");
 
 
-		var game = new GameSystem(canvas, images);
+		var game = new GameSystem(canvas, { images: images });
 
 		game.game_systems.darkness_system = new DarknessSystem(game);
 		game.game_systems.ui_container = new UIContainer(game);
@@ -1104,10 +1104,10 @@ function main () {
 				{ direction: 2, spawn_count: 2, enemy_type: MediumAsteroid, min_speed: 1, },
 				{ direction: 2, spawn_count: 1, enemy_type: MediumSteelAsteroid, min_speed: 1, },
 			] },
-			{ spawn_interval: 60, wave_spawn_count: 1, max_spawned_to_end: 4, wave_tags: [ new EnableDarknessTag() ], batches: [
+			{ spawn_interval: 60, wave_spawn_count: 1, max_spawned_to_end: 2, wave_tags: [ new EnableDarknessTag() ], batches: [
 				{ spawn_count: 1, enemy_type: LargeAsteroid, max_speed: 2, },
 			] },
-			{ spawn_interval: 120, max_spawned: 6, max_spawned_to_end: 6, wave_spawn_count: 2, batches: [
+			{ spawn_interval: 120, max_spawned: 6, max_spawned_to_end: 6, wave_spawn_count: 2, wave_tags: [ new EnableDarknessTag() ], batches: [
 				{ direction: 0, spawn_count: 4, enemy_type: SmallAsteroid, },
 				{ direction: 1, spawn_count: 4, enemy_type: SmallAsteroid, },
 				{ direction: 2, spawn_count: 4, enemy_type: SmallAsteroid, },
