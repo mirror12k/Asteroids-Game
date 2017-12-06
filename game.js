@@ -40,6 +40,22 @@ function segment_intersection(p, pr, q, qs) {
 
 
 
+function all_translated_points(game, pxy) {
+	return [
+		{ px: pxy.px, py: pxy.py },
+		
+		{ px: pxy.px - game.canvas.width, py: pxy.py },
+		{ px: pxy.px, py: pxy.py - game.canvas.height },
+		{ px: pxy.px + game.canvas.width, py: pxy.py },
+		{ px: pxy.px, py: pxy.py + game.canvas.height },
+
+		{ px: pxy.px + game.canvas.width, py: pxy.py + game.canvas.height },
+		{ px: pxy.px - game.canvas.width, py: pxy.py + game.canvas.height },
+		{ px: pxy.px + game.canvas.width, py: pxy.py - game.canvas.height },
+		{ px: pxy.px - game.canvas.width, py: pxy.py - game.canvas.height },
+	];
+}
+
 function wrapped_point (game, pxy) {
 	var wrapped_pxy = { px: pxy.px, py: pxy.py };
 	if (wrapped_pxy.px < 0) {
@@ -456,6 +472,27 @@ function ExplosiveMine(game, px, py, path) {
 }
 ExplosiveMine.prototype = Object.create(Asteroid.prototype);
 ExplosiveMine.prototype.collision_radius = 20;
+ExplosiveMine.prototype.update = function(game) {
+	Asteroid.prototype.update.call(this, game);
+	var self = this;
+
+	if (!this.disable_wrapping_first_time) {
+		var target = game.query_entities(PlayerShip)[0];
+		if (target) {
+			var positions = all_translated_points(game, target);
+
+			positions.sort(function (a, b) {
+				return points_dist(self, a) - points_dist(self, b);
+			});
+
+			var best_position = positions[0];
+
+			var angle = point_angle(this.px, this.py, best_position.px, best_position.py);
+			this.path[this.path_index - 1].sx = Math.cos(angle / 180 * Math.PI) * this.path[this.path_index - 1].speed;
+			this.path[this.path_index - 1].sy = Math.sin(angle / 180 * Math.PI) * this.path[this.path_index - 1].speed;
+		}
+	}
+};
 ExplosiveMine.prototype.hit = function(game, other) {
 	Asteroid.prototype.hit.call(this, game, other);
 	var count = 3 + Math.floor(Math.random() * 3);
@@ -525,7 +562,8 @@ function GiantSteelAsteroid(game, px, py, path) {
 	this.image = game.images.steel_asteroid_base;
 	this.width = 256;
 	this.height = 256;
-	this.angle_granularity = 1;
+	this.angle_granularity = 2;
+	this.rotation = Math.random() * 0.2 - 0.1;
 
 	this.health = 30;
 
@@ -584,6 +622,15 @@ GiantSteelAsteroid.prototype.hit = function(game, other) {
 	this.health--;
 	if (this.health <= 0) {
 		Asteroid.prototype.hit.call(this, game, other);
+
+		for (var i = 0; i < this.inner_ring.length; i++) {
+			var ent = this.inner_ring[i];
+			var offset = d2_point_offset(this.angle, ent.px, ent.py);
+			game.particle_systems.steel_plate_particles.add_particle(this.px + offset.px, this.py + offset.py, 3, ent.frame, ent.angle + this.angle);
+			this.sub_entities.splice(this.sub_entities.indexOf(ent), 1);
+		}
+		this.collision_radius = 30;
+		this.inner_ring = [];
 	} else if (this.health <= 5) {
 		for (var i = 0; i < this.middle_ring.length; i++) {
 			var ent = this.middle_ring[i];
@@ -1347,17 +1394,23 @@ function main () {
 				{ direction: 3, spawn_count: 4, enemy_type: SmallAsteroid, },
 				{ spawn_count: 1, enemy_type: MediumExplosivesAsteroid, min_speed: 1, },
 			] },
-			{ spawn_interval: 60, max_spawned: 4, wave_spawn_count: 4, batches: [
+			{ spawn_interval: 60, max_spawned: 4, wave_spawn_count: 2, batches: [
 				{ spawn_count: 1, enemy_type: LargeAsteroid, min_speed: 1, },
 				{ spawn_count: 4, enemy_type: MediumExplosivesAsteroid, min_speed: 1, },
 				{ spawn_count: 2, enemy_type: EMPMine, min_speed: 0.25, },
 			] },
-			{ spawn_interval: 120, max_spawned: 4, wave_spawn_count: 2, max_spawned_to_end: 2, wave_tags: [ new EnableDarknessTag() ], batches: [
+			{ spawn_interval: 120, max_spawned: 8, wave_spawn_count: 2, batches: [
 				{ spawn_count: 8, enemy_type: MediumSteelAsteroid, min_speed: 1, },
-				{ spawn_count: 4, enemy_type: ExplosiveMine, min_speed: 0.25, },
+				{ spawn_count: 4, enemy_type: ExplosiveMine, min_speed: 0.5, },
 			] },
 			{ spawn_interval: 120, max_spawned: 3, wave_spawn_count: 3, batches: [
 				{ spawn_count: 1, enemy_type: GiantSteelAsteroid, min_speed: 0.25, },
+			] },
+			{ spawn_interval: 120, max_spawned: 1, wave_spawn_count: 1, max_spawned_to_end: 1, batches: [
+				{ spawn_count: 1, enemy_type: GiantSteelAsteroid, min_speed: 0.25, },
+			] },
+			{ spawn_interval: 60, max_spawned: 5, wave_spawn_count: 8, batches: [
+				{ spawn_count: 2, enemy_type: ExplosiveMine, min_speed: 1, },
 			] },
 			// { spawn_interval: 120, max_spawned: 4, wave_spawn_count: 4, wave_tags: [ new EnableDarknessTag() ], batches: [
 			// 	{ spawn_count: 2, enemy_type: MediumSteelAsteroid, min_speed: 1.5, },
