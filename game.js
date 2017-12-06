@@ -325,6 +325,13 @@ function SteelPlate(game, px, py, path) {
 }
 SteelPlate.prototype = Object.create(ScreenEntity.prototype);
 
+function LargeSteelPlate(game, px, py, path) {
+	ScreenEntity.call(this, game, px, py, 48, 48, game.images.steel_asteroid_plates, path);
+	this.max_frame = 4;
+	this.frame = Math.floor(Math.random() * 4);
+}
+LargeSteelPlate.prototype = Object.create(ScreenEntity.prototype);
+
 function Explosion(game, px, py, animation_offset) {
 	var size_factor = 1 + Math.random() * 0.25;
 	WrappingCollidingEntity.call(this, game, px, py, 64 * size_factor, 64 * size_factor, game.images.explosion);
@@ -509,6 +516,140 @@ MediumSteelAsteroid.prototype.hit = function(game, other) {
 			var offset = d2_point_offset(this.angle, ent.px, ent.py);
 			game.particle_systems.steel_plate_particles.add_particle(this.px + offset.px, this.py + offset.py, 3, ent.frame, ent.angle + this.angle);
 			this.sub_entities.splice(i, 1);
+		}
+	}
+};
+
+function GiantSteelAsteroid(game, px, py, path) {
+	Asteroid.call(this, game, px, py, path);
+	this.image = game.images.steel_asteroid_base;
+	this.width = 256;
+	this.height = 256;
+	this.angle_granularity = 1;
+
+	this.health = 30;
+
+	this.collision_radius = 120;
+
+	this.inner_ring = [];
+	var count = 25 + Math.floor(Math.random() * 10);
+	for (var i = 0; i < count; i++) {
+		var angle = (360 / count) * i + Math.random() * (360 / count / 2);
+		var offset_distance = Math.random() * this.collision_radius * 0.25;
+		var offset = point_offset(angle, offset_distance);
+		var plate = new SteelPlate(game, offset.px, offset.py);
+		plate.angle = angle;
+		this.inner_ring.push(plate);
+		this.sub_entities.push(plate);
+	}
+
+	this.middle_ring = [];
+	var count = 40 + Math.floor(Math.random() * 20);
+	for (var i = 0; i < count; i++) {
+		var angle = (360 / count) * i + Math.random() * (360 / count / 2);
+		var offset_distance = Math.min(this.collision_radius * 0.25 + Math.random() * this.collision_radius * 0.5, this.collision_radius * 0.6);
+		var offset = point_offset(angle, offset_distance);
+		var plate = new SteelPlate(game, offset.px, offset.py);
+		plate.angle = angle;
+		this.middle_ring.push(plate);
+		this.sub_entities.push(plate);
+	}
+
+	this.outer_ring = [];
+	var count = 80 + Math.floor(Math.random() * 20);
+	for (var i = 0; i < count; i++) {
+		var angle = (360 / count) * i + Math.random() * (360 / count / 2);
+		var offset_distance = Math.min(this.collision_radius * 0.6 + Math.random() * this.collision_radius * 0.5, this.collision_radius * 1);
+		var offset = point_offset(angle, offset_distance);
+		var plate = new SteelPlate(game, offset.px, offset.py);
+		plate.angle = angle;
+		this.outer_ring.push(plate);
+		this.sub_entities.push(plate);
+	}
+
+	this.super_outer_ring = [];
+	var count = 120 + Math.floor(Math.random() * 20);
+	for (var i = 0; i < count; i++) {
+		var angle = (360 / count) * i + Math.random() * (360 / count / 2);
+		var offset_distance = Math.min(this.collision_radius * 0.6 + Math.random() * this.collision_radius * 1.2, this.collision_radius * 1.2);
+		var offset = point_offset(angle, offset_distance);
+		var plate = new SteelPlate(game, offset.px, offset.py);
+		plate.angle = angle;
+		this.super_outer_ring.push(plate);
+		this.sub_entities.push(plate);
+	}
+}
+GiantSteelAsteroid.prototype = Object.create(Asteroid.prototype);
+GiantSteelAsteroid.prototype.hit = function(game, other) {
+	this.health--;
+	if (this.health <= 0) {
+		Asteroid.prototype.hit.call(this, game, other);
+	} else if (this.health <= 5) {
+		for (var i = 0; i < this.middle_ring.length; i++) {
+			var ent = this.middle_ring[i];
+			var offset = d2_point_offset(this.angle, ent.px, ent.py);
+			game.particle_systems.steel_plate_particles.add_particle(this.px + offset.px, this.py + offset.py, 3, ent.frame, ent.angle + this.angle);
+			this.sub_entities.splice(this.sub_entities.indexOf(ent), 1);
+		}
+		this.collision_radius = 30;
+		this.middle_ring = [];
+
+		for (var i = this.inner_ring.length - 1; i >= 0; i--) {
+			if (Math.random() < 0.2) {
+				var ent = this.inner_ring[i];
+				var offset = d2_point_offset(this.angle, ent.px, ent.py);
+				game.particle_systems.steel_plate_particles.add_particle(this.px + offset.px, this.py + offset.py, 3, ent.frame, ent.angle + this.angle);
+				this.sub_entities.splice(this.sub_entities.indexOf(ent), 1);
+				this.inner_ring.splice(i, 1);
+			}
+		}
+	} else if (this.health <= 10) {
+		for (var i = 0; i < this.outer_ring.length; i++) {
+			var ent = this.outer_ring[i];
+			var offset = d2_point_offset(this.angle, ent.px, ent.py);
+			game.particle_systems.steel_plate_particles.add_particle(this.px + offset.px, this.py + offset.py, 3, ent.frame, ent.angle + this.angle);
+			this.sub_entities.splice(this.sub_entities.indexOf(ent), 1);
+		}
+		this.collision_radius = 60;
+		this.outer_ring = [];
+
+		for (var i = this.middle_ring.length - 1; i >= 0; i--) {
+			if (Math.random() < 0.1) {
+				var ent = this.middle_ring[i];
+				var offset = d2_point_offset(this.angle, ent.px, ent.py);
+				game.particle_systems.steel_plate_particles.add_particle(this.px + offset.px, this.py + offset.py, 3, ent.frame, ent.angle + this.angle);
+				this.sub_entities.splice(this.sub_entities.indexOf(ent), 1);
+				this.middle_ring.splice(i, 1);
+			}
+		}
+	} else if (this.health <= 20) {
+		for (var i = 0; i < this.super_outer_ring.length; i++) {
+			var ent = this.super_outer_ring[i];
+			var offset = d2_point_offset(this.angle, ent.px, ent.py);
+			game.particle_systems.steel_plate_particles.add_particle(this.px + offset.px, this.py + offset.py, 3, ent.frame, ent.angle + this.angle);
+			this.sub_entities.splice(this.sub_entities.indexOf(ent), 1);
+		}
+		this.collision_radius = 90;
+		this.super_outer_ring = [];
+
+		for (var i = this.outer_ring.length - 1; i >= 0; i--) {
+			if (Math.random() < 0.1) {
+				var ent = this.outer_ring[i];
+				var offset = d2_point_offset(this.angle, ent.px, ent.py);
+				game.particle_systems.steel_plate_particles.add_particle(this.px + offset.px, this.py + offset.py, 3, ent.frame, ent.angle + this.angle);
+				this.sub_entities.splice(this.sub_entities.indexOf(ent), 1);
+				this.outer_ring.splice(i, 1);
+			}
+		}
+	} else {
+		for (var i = this.super_outer_ring.length - 1; i >= 0; i--) {
+			if (Math.random() < 0.1) {
+				var ent = this.super_outer_ring[i];
+				var offset = d2_point_offset(this.angle, ent.px, ent.py);
+				game.particle_systems.steel_plate_particles.add_particle(this.px + offset.px, this.py + offset.py, 3, ent.frame, ent.angle + this.angle);
+				this.sub_entities.splice(this.sub_entities.indexOf(ent), 1);
+				this.super_outer_ring.splice(i, 1);
+			}
 		}
 	}
 };
@@ -901,28 +1042,34 @@ NPCDirectorEntity.prototype.spawn_batch = function(game, batch) {
 	var spawn_count = batch.spawn_count || 1;
 
 	for (var i = 0; i < spawn_count; i++) {
-		if (direction === undefined)
-			direction = Math.floor(Math.random() * 4);
+		var path = { speed: min_speed + Math.random() * (max_speed - min_speed), angle: undefined, };
+		var asteroid = new enemy_type(game, undefined, undefined, [ path ]);
+
+		var spawn_direction = direction;
+		if (spawn_direction === undefined)
+			spawn_direction = Math.floor(Math.random() * 4);
 		var offsetx, offsety;
-		if (direction === 0) {
-			offsetx = game.canvas.width + 100;
+		if (spawn_direction === 0) {
+			offsetx = game.canvas.width + asteroid.width;
 			offsety = Math.random() * game.canvas.height;
-		} else if (direction === 1) {
+		} else if (spawn_direction === 1) {
 			offsetx = Math.random() * game.canvas.width;
-			offsety = game.canvas.height + 100;
-		} else if (direction === 2) {
-			offsetx = -100;
+			offsety = game.canvas.height + asteroid.width;
+		} else if (spawn_direction === 2) {
+			offsetx = -asteroid.width;
 			offsety = Math.random() * game.canvas.height;
 		} else {
 			offsetx = Math.random() * game.canvas.width;
-			offsety = -100;
+			offsety = -asteroid.width;
 		}
 
-		var target_point = border_point(game, { px: Math.random() * game.canvas.width, py: Math.random() * game.canvas.height }, 32);
-		var angle = point_angle(offsetx, offsety, target_point.px, target_point.py);
+		asteroid.px = offsetx;
+		asteroid.py = offsety;
 
-		var asteroid = new enemy_type(game, offsetx, offsety,
-			[ { angle: angle, speed: min_speed + Math.random() * (max_speed - min_speed), }, ]);
+		var target_point = border_point(game, { px: Math.random() * game.canvas.width, py: Math.random() * game.canvas.height }, asteroid.width / 2);
+		var angle = point_angle(offsetx, offsety, target_point.px, target_point.py);
+		path.angle = angle;
+
 		game.entities.push(asteroid);
 		var entrance_position = asteroid_entrance(game, asteroid);
 		if (entrance_position) {
@@ -1183,9 +1330,9 @@ function main () {
 		});
 
 		game.game_systems.npc_director = new NPCDirectorEntity(game, [
-			{ spawn_interval: 60, max_spawned: 5, max_spawned_to_end: 2, wave_spawn_count: 4, batches: [
-				{ spawn_count: 1, enemy_type: MediumAsteroid, min_speed: 0.5, },
-			] },
+			// { spawn_interval: 60, max_spawned: 5, max_spawned_to_end: 2, wave_spawn_count: 4, batches: [
+			// 	{ spawn_count: 1, enemy_type: MediumAsteroid, min_speed: 0.5, },
+			// ] },
 			{ spawn_interval: 60, max_spawned: 8, max_spawned_to_end: 4, wave_spawn_count: 4, batches: [
 				{ direction: 2, spawn_count: 2, enemy_type: MediumAsteroid, min_speed: 1, },
 				{ direction: 2, spawn_count: 1, enemy_type: MediumSteelAsteroid, min_speed: 1, },
@@ -1206,14 +1353,17 @@ function main () {
 				{ spawn_count: 2, enemy_type: EMPMine, min_speed: 0.25, },
 			] },
 			{ spawn_interval: 120, max_spawned: 4, wave_spawn_count: 2, max_spawned_to_end: 2, wave_tags: [ new EnableDarknessTag() ], batches: [
-				{ spawn_count: 4, enemy_type: MediumSteelAsteroid, min_speed: 1, },
+				{ spawn_count: 8, enemy_type: MediumSteelAsteroid, min_speed: 1, },
 				{ spawn_count: 4, enemy_type: ExplosiveMine, min_speed: 0.25, },
 			] },
-			{ spawn_interval: 120, max_spawned: 4, wave_spawn_count: 4, wave_tags: [ new EnableDarknessTag() ], batches: [
-				{ spawn_count: 2, enemy_type: MediumSteelAsteroid, min_speed: 1.5, },
-				{ spawn_count: 2, enemy_type: MediumAsteroid, min_speed: 1, },
-				{ spawn_count: 2, enemy_type: ExplosiveMine, min_speed: 0.25, },
+			{ spawn_interval: 120, max_spawned: 3, wave_spawn_count: 3, batches: [
+				{ spawn_count: 1, enemy_type: GiantSteelAsteroid, min_speed: 0.25, },
 			] },
+			// { spawn_interval: 120, max_spawned: 4, wave_spawn_count: 4, wave_tags: [ new EnableDarknessTag() ], batches: [
+			// 	{ spawn_count: 2, enemy_type: MediumSteelAsteroid, min_speed: 1.5, },
+			// 	{ spawn_count: 2, enemy_type: MediumAsteroid, min_speed: 1, },
+			// 	{ spawn_count: 2, enemy_type: ExplosiveMine, min_speed: 0.25, },
+			// ] },
 		]);
 
 		// game.particle_systems.gas_particles = new ParticleEffectSystem(game, { fill_style: '#202', particle_image: game.images.particle_steam, });
