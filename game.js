@@ -512,8 +512,33 @@ ExplosiveMine.prototype.hit = function(game, other) {
 	}
 };
 
-function SuperMine(game, px, py, path) {
+function PlatedAsteroidEntity(game, px, py, path) {
 	Asteroid.call(this, game, px, py, path);
+}
+PlatedAsteroidEntity.prototype = Object.create(Asteroid.prototype);
+// PlatedAsteroidEntity.prototype.collision_radius = 60;
+PlatedAsteroidEntity.prototype.hit = function(game, other) {
+	// override hit to calculate when sub entities are hit
+	var is_sub_entity_hit = false;
+	for (var i = this.sub_entities.length - 1; i >= 0; i--) {
+		var ent = this.sub_entities[i];
+		var offset = d2_point_offset(this.angle, ent.px, ent.py);
+		var p = { px: this.px + offset.px, py: this.py + offset.py };
+
+		if (points_dist(p, other) < ent.collision_radius + other.collision_radius) {
+			is_sub_entity_hit = true;
+			this.hit_plate(game, other, ent);
+			break;
+		}
+	}
+
+	if (!is_sub_entity_hit) {
+		this.hit_self(game, other);
+	}
+};
+
+function SuperMine(game, px, py, path) {
+	PlatedAsteroidEntity.call(this, game, px, py, path);
 	this.image = game.images.super_mine;
 	this.width = 128;
 	this.height = 128;
@@ -526,16 +551,23 @@ function SuperMine(game, px, py, path) {
 	this.rotation = Math.random() * 0.2 - 0.1;
 
 	this.support_crystals = [];
-	this.support_crystals.push(new ScreenEntity(game, 56, 0, 32, 32, game.images.red_crystal));
-	this.support_crystals.push(new ScreenEntity(game, -56, 0, 32, 32, game.images.red_crystal));
-	this.support_crystals.push(new ScreenEntity(game, 0, 56, 32, 32, game.images.red_crystal));
-	this.support_crystals.push(new ScreenEntity(game, 0, -56, 32, 32, game.images.red_crystal));
-	this.sub_entities = this.sub_entities.concat(this.support_crystals);
+	var ent = new ScreenEntity(game, 56, 0, 32, 32, game.images.red_crystal);
+	ent.collision_radius = 16;
+	this.sub_entities.push(ent);
+	var ent = new ScreenEntity(game, -56, 0, 32, 32, game.images.red_crystal);
+	ent.collision_radius = 16;
+	this.sub_entities.push(ent);
+	var ent = new ScreenEntity(game, 0, 56, 32, 32, game.images.red_crystal);
+	ent.collision_radius = 16;
+	this.sub_entities.push(ent);
+	var ent = new ScreenEntity(game, 0, -56, 32, 32, game.images.red_crystal);
+	ent.collision_radius = 16;
+	this.sub_entities.push(ent);
 }
-SuperMine.prototype = Object.create(Asteroid.prototype);
+SuperMine.prototype = Object.create(PlatedAsteroidEntity.prototype);
 SuperMine.prototype.collision_radius = 60;
 SuperMine.prototype.update = function(game) {
-	Asteroid.prototype.update.call(this, game);
+	PlatedAsteroidEntity.prototype.update.call(this, game);
 	var self = this;
 
 	if (this.spawn_entity) {
@@ -566,21 +598,10 @@ SuperMine.prototype.update = function(game) {
 		}
 	}
 };
-SuperMine.prototype.hit = function(game, other) {
+SuperMine.prototype.hit_plate = function(game, other, ent) {
+	this.health--;
+	this.remove_entity(ent);
 
-	for (var i = this.support_crystals.length - 1; i >= 0; i--) {
-		var ent = this.support_crystals[i];
-		var offset = d2_point_offset(this.angle, ent.px, ent.py);
-		var p = { px: this.px + offset.px, py: this.py + offset.py };
-
-		if (points_dist(p, other) < 16 + other.collision_radius) {
-			this.health--;
-			this.remove_entity(ent);
-			this.support_crystals.splice(i, 1);
-		}
-	}
-
-	// this.health--;
 	if (this.health <= 0) {
 		Asteroid.prototype.hit.call(this, game, other);
 
@@ -590,6 +611,9 @@ SuperMine.prototype.hit = function(game, other) {
 			game.entities_to_add.push(new Explosion(game, this.px + offset.px, this.py + offset.py, Math.floor(Math.random() * 8)));
 		}
 	}
+};
+SuperMine.prototype.hit_self = function(game, other) {
+	// nothing, body is immune
 };
 
 function EMPMine(game, px, py, path) {
@@ -819,7 +843,7 @@ GiantSteelAsteroid.prototype.hit = function(game, other) {
 
 
 function IcicleCarrier(game, px, py, path) {
-	Asteroid.call(this, game, px, py, path);
+	PlatedAsteroidEntity.call(this, game, px, py, path);
 	this.image = game.images.icicle_core;
 	this.width = 64;
 	this.height = 64;
@@ -836,52 +860,43 @@ function IcicleCarrier(game, px, py, path) {
 		var offset = point_offset(angle, offset_distance);
 		var ent = new ScreenEntity(game, offset.px, offset.py, 48, 48, game.images.icicle_cluster);
 		ent.angle = angle + Math.random() * (360 / count / 2);
+		ent.collision_radius = 20;
 		this.sub_entities.push(ent);
 	}
 }
-IcicleCarrier.prototype = Object.create(Asteroid.prototype);
+IcicleCarrier.prototype = Object.create(PlatedAsteroidEntity.prototype);
 IcicleCarrier.prototype.collision_radius = 32;
-IcicleCarrier.prototype.hit = function(game, other) {
-	var ents_hit = false;
+IcicleCarrier.prototype.hit_plate = function(game, other, ent) {
+	this.remove_entity(ent);
+	
+	var offset = d2_point_offset(this.angle, ent.px, ent.py);
+	var p = { px: this.px + offset.px, py: this.py + offset.py };
+
+	var target = game.query_entities(PlayerShip)[0];
+	if (target) {
+		var projectile = new SmallIcicle(game, p.px, p.py, [{
+			timeout: 120,
+			angle: point_angle(p.px, p.py, target.px, target.py),
+			speed: 3,
+		}]);
+		game.add_entity(projectile);
+	}
+};
+IcicleCarrier.prototype.hit_self = function(game, other) {
+	Asteroid.prototype.hit.call(this, game, other);
+
 	for (var i = this.sub_entities.length - 1; i >= 0; i--) {
 		var ent = this.sub_entities[i];
-		var offset = d2_point_offset(this.angle, ent.px, ent.py);
-		var p = { px: this.px + offset.px, py: this.py + offset.py };
+		if (Math.random() < 0.5) {
+			var offset = d2_point_offset(this.angle, ent.px, ent.py);
+			var p = { px: this.px + offset.px, py: this.py + offset.py };
 
-		if (points_dist(p, other) < 20 + other.collision_radius) {
-			this.remove_entity(ent);
-
-			var target = game.query_entities(PlayerShip)[0];
-			if (target) {
-				var projectile = new SmallIcicle(game, p.px, p.py, [{
-					timeout: 120,
-					angle: point_angle(p.px, p.py, target.px, target.py),
-					speed: 3,
-				}]);
-				game.add_entity(projectile);
-			}
-
-			ents_hit = true;
-			break;
-		}
-	}
-
-	if (ents_hit === false) {
-		Asteroid.prototype.hit.call(this, game, other);
-
-		for (var i = this.sub_entities.length - 1; i >= 0; i--) {
-			var ent = this.sub_entities[i];
-			if (Math.random() < 0.5) {
-				var offset = d2_point_offset(this.angle, ent.px, ent.py);
-				var p = { px: this.px + offset.px, py: this.py + offset.py };
-
-				var projectile = new SmallIcicle(game, p.px, p.py, [{
-					timeout: 120,
-					angle: ent.angle + this.angle,
-					speed: 3,
-				}]);
-				game.add_entity(projectile);
-			}
+			var projectile = new SmallIcicle(game, p.px, p.py, [{
+				timeout: 120,
+				angle: ent.angle + this.angle,
+				speed: 3,
+			}]);
+			game.add_entity(projectile);
 		}
 	}
 };
@@ -1637,6 +1652,10 @@ function main () {
 			// { spawn_interval: 60, max_spawned: 5, max_spawned_to_end: 2, wave_spawn_count: 4, batches: [
 			// 	{ spawn_count: 1, enemy_type: MediumAsteroid, min_speed: 0.5, },
 			// ] },
+			{ spawn_interval: 120, max_spawned: 2, wave_spawn_count: 3, batches: [
+				{ spawn_count: 2, enemy_type: IcicleCarrier, min_speed: 0.7, },
+				// { spawn_count: 1, enemy_type: ExplosiveMine, min_speed: 1, },
+			] },
 			{ spawn_interval: 60, max_spawned: 1, wave_spawn_count: 3, batches: [
 				{ direction: 0, spawn_count: 4, enemy_type: DodgingUFO, min_speed: 2, max_speed: 2, },
 			] },
