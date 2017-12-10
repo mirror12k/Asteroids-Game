@@ -284,9 +284,11 @@ Asteroid.prototype.collision_map = [
 	},
 ];
 Asteroid.prototype.hit_missile = function(game, other) {
-	this.hit(game, other);
-	game.entities_to_remove.push(other);
-	other.hit(game, this);
+	if (!other.dead) {
+		this.hit(game, other);
+		game.entities_to_remove.push(other);
+		other.hit(game, this);
+	}
 };
 Asteroid.prototype.hit = function(game, other) {
 	game.entities_to_remove.push(this);
@@ -555,23 +557,6 @@ SuperMine.prototype.update = function(game) {
 			this.add_entity(this.spawn_entity);
 		}
 	}
-
-	// if (!this.disable_wrapping_first_time) {
-	// 	var target = game.query_entities(PlayerShip)[0];
-	// 	if (target) {
-	// 		var positions = all_translated_points(game, target);
-
-	// 		positions.sort(function (a, b) {
-	// 			return points_dist(self, a) - points_dist(self, b);
-	// 		});
-
-	// 		var best_position = positions[0];
-
-	// 		var angle = point_angle(this.px, this.py, best_position.px, best_position.py);
-	// 		this.path[this.path_index - 1].sx = Math.cos(angle / 180 * Math.PI) * this.path[this.path_index - 1].speed;
-	// 		this.path[this.path_index - 1].sy = Math.sin(angle / 180 * Math.PI) * this.path[this.path_index - 1].speed;
-	// 	}
-	// }
 };
 SuperMine.prototype.hit = function(game, other) {
 
@@ -723,7 +708,10 @@ GiantSteelAsteroid.prototype.hit = function(game, other) {
 		for (var i = 0; i < this.inner_ring.length; i++) {
 			var ent = this.inner_ring[i];
 			var offset = d2_point_offset(this.angle, ent.px, ent.py);
-			game.particle_systems.steel_plate_particles.add_particle(this.px + offset.px, this.py + offset.py, 3, ent.frame, ent.angle + this.angle);
+			var point = { px: this.px + offset.px, py: this.py + offset.py };
+			if (!this.disable_wrapping_first_time)
+				point = wrapped_point(game, point);
+			game.particle_systems.steel_plate_particles.add_particle(point.px, point.py, 3, ent.frame, ent.angle + this.angle);
 			this.sub_entities.splice(this.sub_entities.indexOf(ent), 1);
 		}
 		this.collision_radius = 30;
@@ -732,7 +720,10 @@ GiantSteelAsteroid.prototype.hit = function(game, other) {
 		for (var i = 0; i < this.middle_ring.length; i++) {
 			var ent = this.middle_ring[i];
 			var offset = d2_point_offset(this.angle, ent.px, ent.py);
-			game.particle_systems.steel_plate_particles.add_particle(this.px + offset.px, this.py + offset.py, 3, ent.frame, ent.angle + this.angle);
+			var point = { px: this.px + offset.px, py: this.py + offset.py };
+			if (!this.disable_wrapping_first_time)
+				point = wrapped_point(game, point);
+			game.particle_systems.steel_plate_particles.add_particle(point.px, point.py, 3, ent.frame, ent.angle + this.angle);
 			this.sub_entities.splice(this.sub_entities.indexOf(ent), 1);
 		}
 		this.collision_radius = 30;
@@ -742,7 +733,10 @@ GiantSteelAsteroid.prototype.hit = function(game, other) {
 			if (Math.random() < 0.2) {
 				var ent = this.inner_ring[i];
 				var offset = d2_point_offset(this.angle, ent.px, ent.py);
-				game.particle_systems.steel_plate_particles.add_particle(this.px + offset.px, this.py + offset.py, 3, ent.frame, ent.angle + this.angle);
+				var point = { px: this.px + offset.px, py: this.py + offset.py };
+				if (!this.disable_wrapping_first_time)
+					point = wrapped_point(game, point);
+				game.particle_systems.steel_plate_particles.add_particle(point.px, point.py, 3, ent.frame, ent.angle + this.angle);
 				this.sub_entities.splice(this.sub_entities.indexOf(ent), 1);
 				this.inner_ring.splice(i, 1);
 			}
@@ -751,7 +745,10 @@ GiantSteelAsteroid.prototype.hit = function(game, other) {
 		for (var i = 0; i < this.outer_ring.length; i++) {
 			var ent = this.outer_ring[i];
 			var offset = d2_point_offset(this.angle, ent.px, ent.py);
-			game.particle_systems.steel_plate_particles.add_particle(this.px + offset.px, this.py + offset.py, 3, ent.frame, ent.angle + this.angle);
+			var point = { px: this.px + offset.px, py: this.py + offset.py };
+			if (!this.disable_wrapping_first_time)
+				point = wrapped_point(game, point);
+			game.particle_systems.steel_plate_particles.add_particle(point.px, point.py, 3, ent.frame, ent.angle + this.angle);
 			this.sub_entities.splice(this.sub_entities.indexOf(ent), 1);
 		}
 		this.collision_radius = 60;
@@ -761,7 +758,10 @@ GiantSteelAsteroid.prototype.hit = function(game, other) {
 			if (Math.random() < 0.1) {
 				var ent = this.middle_ring[i];
 				var offset = d2_point_offset(this.angle, ent.px, ent.py);
-				game.particle_systems.steel_plate_particles.add_particle(this.px + offset.px, this.py + offset.py, 3, ent.frame, ent.angle + this.angle);
+				var point = { px: this.px + offset.px, py: this.py + offset.py };
+				if (!this.disable_wrapping_first_time)
+					point = wrapped_point(game, point);
+				game.particle_systems.steel_plate_particles.add_particle(point.px, point.py, 3, ent.frame, ent.angle + this.angle);
 				this.sub_entities.splice(this.sub_entities.indexOf(ent), 1);
 				this.middle_ring.splice(i, 1);
 			}
@@ -770,7 +770,10 @@ GiantSteelAsteroid.prototype.hit = function(game, other) {
 		for (var i = 0; i < this.super_outer_ring.length; i++) {
 			var ent = this.super_outer_ring[i];
 			var offset = d2_point_offset(this.angle, ent.px, ent.py);
-			game.particle_systems.steel_plate_particles.add_particle(this.px + offset.px, this.py + offset.py, 3, ent.frame, ent.angle + this.angle);
+			var point = { px: this.px + offset.px, py: this.py + offset.py };
+			if (!this.disable_wrapping_first_time)
+				point = wrapped_point(game, point);
+			game.particle_systems.steel_plate_particles.add_particle(point.px, point.py, 3, ent.frame, ent.angle + this.angle);
 			this.sub_entities.splice(this.sub_entities.indexOf(ent), 1);
 		}
 		this.collision_radius = 90;
@@ -780,7 +783,10 @@ GiantSteelAsteroid.prototype.hit = function(game, other) {
 			if (Math.random() < 0.1) {
 				var ent = this.outer_ring[i];
 				var offset = d2_point_offset(this.angle, ent.px, ent.py);
-				game.particle_systems.steel_plate_particles.add_particle(this.px + offset.px, this.py + offset.py, 3, ent.frame, ent.angle + this.angle);
+				var point = { px: this.px + offset.px, py: this.py + offset.py };
+				if (!this.disable_wrapping_first_time)
+					point = wrapped_point(game, point);
+				game.particle_systems.steel_plate_particles.add_particle(point.px, point.py, 3, ent.frame, ent.angle + this.angle);
 				this.sub_entities.splice(this.sub_entities.indexOf(ent), 1);
 				this.outer_ring.splice(i, 1);
 			}
@@ -790,11 +796,108 @@ GiantSteelAsteroid.prototype.hit = function(game, other) {
 			if (Math.random() < 0.1) {
 				var ent = this.super_outer_ring[i];
 				var offset = d2_point_offset(this.angle, ent.px, ent.py);
-				game.particle_systems.steel_plate_particles.add_particle(this.px + offset.px, this.py + offset.py, 3, ent.frame, ent.angle + this.angle);
+				var point = { px: this.px + offset.px, py: this.py + offset.py };
+				if (!this.disable_wrapping_first_time)
+					point = wrapped_point(game, point);
+				game.particle_systems.steel_plate_particles.add_particle(point.px, point.py, 3, ent.frame, ent.angle + this.angle);
 				this.sub_entities.splice(this.sub_entities.indexOf(ent), 1);
 				this.super_outer_ring.splice(i, 1);
 			}
 		}
+	}
+};
+
+
+
+
+function IcicleCarrier(game, px, py, path) {
+	Asteroid.call(this, game, px, py, path);
+	this.image = game.images.icicle_core;
+	this.width = 64;
+	this.height = 64;
+
+	// this.health = 4;
+
+	this.spawn_step = 0;
+	this.spawn_entity = undefined;
+
+	this.rotation = Math.random() * 0.2 - 0.1;
+
+	var count = 8 + Math.floor(Math.random() * 8);
+	for (var i = 0; i < count; i++) {
+		var angle = (360 / count) * i + Math.random() * (360 / count / 2);
+		var offset_distance = 24 + Math.random() * this.collision_radius;
+		// if (offset_distance > this.collision_radius)
+		// 	offset_distance = this.collision_radius;
+		var offset = point_offset(angle, offset_distance);
+		var ent = new ScreenEntity(game, offset.px, offset.py, 48, 48, game.images.icicle_cluster);
+		ent.angle = angle + Math.random() * (360 / count / 2);
+		this.sub_entities.push(ent);
+	}
+
+	// this.support_crystals = [];
+	// this.support_crystals.push(new ScreenEntity(game, 56, 0, 32, 32, game.images.icicle_cluster));
+	// this.support_crystals.push(new ScreenEntity(game, -56, 0, 32, 32, game.images.icicle_cluster));
+	// this.support_crystals.push(new ScreenEntity(game, 0, 56, 32, 32, game.images.icicle_cluster));
+	// this.support_crystals.push(new ScreenEntity(game, 0, -56, 32, 32, game.images.icicle_cluster));
+	// this.sub_entities = this.sub_entities.concat(this.support_crystals);
+}
+IcicleCarrier.prototype = Object.create(Asteroid.prototype);
+IcicleCarrier.prototype.collision_radius = 32;
+// IcicleCarrier.prototype.update = function(game) {
+// 	Asteroid.prototype.update.call(this, game);
+// 	var self = this;
+
+// };
+IcicleCarrier.prototype.hit = function(game, other) {
+	var ents_hit = false;
+	for (var i = this.sub_entities.length - 1; i >= 0; i--) {
+		var ent = this.sub_entities[i];
+		var offset = d2_point_offset(this.angle, ent.px, ent.py);
+		var p = { px: this.px + offset.px, py: this.py + offset.py };
+
+		if (points_dist(p, other) < 20 + other.collision_radius) {
+			this.remove_entity(ent);
+
+			var target = game.query_entities(PlayerShip)[0];
+			if (target) {
+				var projectile = new SmallIcicle(game, p.px, p.py, [{
+					timeout: 120,
+					angle: point_angle(p.px, p.py, target.px, target.py),
+					speed: 3,
+				}]);
+				game.add_entity(projectile);
+			}
+
+			ents_hit = true;
+			break;
+		}
+	}
+
+	// this.health--;
+	if (ents_hit === false) {
+		Asteroid.prototype.hit.call(this, game, other);
+
+		for (var i = this.sub_entities.length - 1; i >= 0; i--) {
+			var ent = this.sub_entities[i];
+			if (Math.random() < 0.5) {
+				var offset = d2_point_offset(this.angle, ent.px, ent.py);
+				var p = { px: this.px + offset.px, py: this.py + offset.py };
+
+				var projectile = new SmallIcicle(game, p.px, p.py, [{
+					timeout: 120,
+					angle: ent.angle + this.angle,
+					speed: 3,
+				}]);
+				game.add_entity(projectile);
+			}
+		}
+
+		// var count = 3 + Math.floor(Math.random() * 3);
+		// for (var i = 0; i < count; i++) {
+		// 	var offset = point_offset((360 / count) * i + Math.random() * (360 / count / 2), Math.random() * this.collision_radius * 1.8);
+		// 	game.entities_to_add.push(new Explosion(game, this.px + offset.px, this.py + offset.py, Math.floor(Math.random() * 8)));
+		// }
 	}
 };
 
@@ -806,6 +909,18 @@ function SmallAsteroid(game, px, py, path) {
 }
 SmallAsteroid.prototype = Object.create(Asteroid.prototype);
 SmallAsteroid.prototype.collision_radius = 15;
+
+
+function SmallIcicle(game, px, py, path) {
+	Asteroid.call(this, game, px, py, path);
+	this.image = game.images.icicle;
+	this.width = 24;
+	this.height = 24;
+
+	this.rotation = 0;
+}
+SmallIcicle.prototype = Object.create(Asteroid.prototype);
+SmallIcicle.prototype.collision_radius = 5;
 
 
 function PlayerShip(game, px, py, path) {
@@ -964,11 +1079,14 @@ function PlayerMissile(game, px, py, path) {
 	this.angle_granularity = 5;
 	this.disable_wrapping_first_time = false;
 
+	this.dead = false;
+
 	// this.entity_tags.push(new PointLightSourceTag());
 }
 PlayerMissile.prototype = Object.create(WrappingPathEntity.prototype);
 PlayerMissile.prototype.collision_radius = 4;
 PlayerMissile.prototype.hit = function(game, other) {
+	this.dead = true;
 	// spawn rocket explosion particles
 	for (var i = 0; i < 25; i++) {
 		game.particle_systems.fire_particles.add_particle(this.px, this.py, 4);
@@ -1439,6 +1557,9 @@ function main () {
 		emp_mine: "emp_mine.png",
 		super_mine: "super_mine.png",
 		red_crystal: "red_crystal.png",
+		icicle: "icicle.png",
+		icicle_cluster: "icicle_cluster.png",
+		icicle_core: "icicle_core.png",
 
 		darkness_texture: "darkness_texture.png",
 		particle_effect_generic: "particle_effect_generic.png",
@@ -1479,40 +1600,44 @@ function main () {
 			// { spawn_interval: 60, max_spawned: 5, max_spawned_to_end: 2, wave_spawn_count: 4, batches: [
 			// 	{ spawn_count: 1, enemy_type: MediumAsteroid, min_speed: 0.5, },
 			// ] },
-			{ spawn_interval: 60, max_spawned: 8, max_spawned_to_end: 4, wave_spawn_count: 3, batches: [
-				{ direction: 2, spawn_count: 2, enemy_type: MediumAsteroid, min_speed: 1, },
-				{ direction: 2, spawn_count: 1, enemy_type: MediumSteelAsteroid, min_speed: 1, },
-			] },
-			// { spawn_interval: 60, wave_spawn_count: 1, max_spawned_to_end: 2, wave_tags: [ new EnableDarknessTag() ], batches: [
-			// 	{ spawn_count: 1, enemy_type: LargeAsteroid, max_speed: 2, },
+			// { spawn_interval: 60, max_spawned: 8, max_spawned_to_end: 4, wave_spawn_count: 3, batches: [
+			// 	{ direction: 2, spawn_count: 2, enemy_type: MediumAsteroid, min_speed: 1, },
+			// 	{ direction: 2, spawn_count: 1, enemy_type: MediumSteelAsteroid, min_speed: 1, },
 			// ] },
-			{ spawn_interval: 120, max_spawned: 6, max_spawned_to_end: 6, wave_spawn_count: 2, wave_tags: [ new EnableDarknessTag() ], batches: [
-				{ direction: 0, spawn_count: 4, enemy_type: SmallAsteroid, },
-				{ direction: 1, spawn_count: 4, enemy_type: SmallAsteroid, },
-				{ direction: 2, spawn_count: 4, enemy_type: SmallAsteroid, },
-				{ direction: 3, spawn_count: 4, enemy_type: SmallAsteroid, },
-				{ spawn_count: 1, enemy_type: MediumExplosivesAsteroid, min_speed: 1, },
-			] },
-			{ spawn_interval: 60, max_spawned: 4, wave_spawn_count: 2, batches: [
-				{ spawn_count: 1, enemy_type: LargeAsteroid, min_speed: 1, },
-				{ spawn_count: 4, enemy_type: MediumExplosivesAsteroid, min_speed: 1, },
-				{ spawn_count: 2, enemy_type: EMPMine, min_speed: 0.25, },
-			] },
-			{ spawn_interval: 120, max_spawned: 8, wave_spawn_count: 2, batches: [
-				{ spawn_count: 6, enemy_type: MediumSteelAsteroid, min_speed: 1, },
-				{ spawn_count: 4, enemy_type: ExplosiveMine, min_speed: 0.5, },
-			] },
-			{ spawn_interval: 120, max_spawned: 3, wave_spawn_count: 3, batches: [
-				{ spawn_count: 1, enemy_type: GiantSteelAsteroid, min_speed: 0.25, },
-			] },
-			{ spawn_interval: 120, max_spawned: 1, wave_spawn_count: 1, max_spawned_to_end: 1, batches: [
-				{ spawn_count: 1, enemy_type: GiantSteelAsteroid, min_speed: 0.25, },
-			] },
-			{ spawn_interval: 60, max_spawned: 5, wave_spawn_count: 8, batches: [
-				{ spawn_count: 2, enemy_type: ExplosiveMine, min_speed: 1, },
-			] },
-			{ spawn_interval: 60, max_spawned: 8, wave_spawn_count: 1, batches: [
-				{ spawn_count: 1, enemy_type: SuperMine, min_speed: 1, },
+			// // { spawn_interval: 60, wave_spawn_count: 1, max_spawned_to_end: 2, wave_tags: [ new EnableDarknessTag() ], batches: [
+			// // 	{ spawn_count: 1, enemy_type: LargeAsteroid, max_speed: 2, },
+			// // ] },
+			// { spawn_interval: 120, max_spawned: 6, max_spawned_to_end: 6, wave_spawn_count: 2, wave_tags: [ new EnableDarknessTag() ], batches: [
+			// 	{ direction: 0, spawn_count: 4, enemy_type: SmallAsteroid, },
+			// 	{ direction: 1, spawn_count: 4, enemy_type: SmallAsteroid, },
+			// 	{ direction: 2, spawn_count: 4, enemy_type: SmallAsteroid, },
+			// 	{ direction: 3, spawn_count: 4, enemy_type: SmallAsteroid, },
+			// 	{ spawn_count: 1, enemy_type: MediumExplosivesAsteroid, min_speed: 1, },
+			// ] },
+			// { spawn_interval: 60, max_spawned: 4, wave_spawn_count: 2, batches: [
+			// 	{ spawn_count: 1, enemy_type: LargeAsteroid, min_speed: 1, },
+			// 	{ spawn_count: 4, enemy_type: MediumExplosivesAsteroid, min_speed: 1, },
+			// 	{ spawn_count: 2, enemy_type: EMPMine, min_speed: 0.25, },
+			// ] },
+			// { spawn_interval: 120, max_spawned: 4, wave_spawn_count: 2, batches: [
+			// 	{ spawn_count: 6, enemy_type: MediumSteelAsteroid, min_speed: 1, },
+			// 	{ spawn_count: 4, enemy_type: ExplosiveMine, min_speed: 0.5, },
+			// ] },
+			// { spawn_interval: 120, max_spawned: 3, wave_spawn_count: 3, batches: [
+			// 	{ spawn_count: 1, enemy_type: GiantSteelAsteroid, min_speed: 0.25, },
+			// ] },
+			// { spawn_interval: 120, max_spawned: 1, wave_spawn_count: 1, max_spawned_to_end: 1, batches: [
+			// 	{ spawn_count: 1, enemy_type: GiantSteelAsteroid, min_speed: 0.25, },
+			// ] },
+			// { spawn_interval: 60, max_spawned: 5, wave_spawn_count: 8, batches: [
+			// 	{ spawn_count: 2, enemy_type: ExplosiveMine, min_speed: 1, },
+			// ] },
+			// { spawn_interval: 60, max_spawned: 8, wave_spawn_count: 1, batches: [
+			// 	{ spawn_count: 1, enemy_type: SuperMine, min_speed: 1, },
+			// ] },
+			{ spawn_interval: 120, max_spawned: 2, wave_spawn_count: 3, batches: [
+				{ spawn_count: 2, enemy_type: IcicleCarrier, min_speed: 0.7, },
+				{ spawn_count: 1, enemy_type: ExplosiveMine, min_speed: 1, },
 			] },
 			// { spawn_interval: 120, max_spawned: 4, wave_spawn_count: 4, wave_tags: [ new EnableDarknessTag() ], batches: [
 			// 	{ spawn_count: 2, enemy_type: MediumSteelAsteroid, min_speed: 1.5, },
