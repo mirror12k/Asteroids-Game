@@ -536,6 +536,14 @@ PlatedAsteroidEntity.prototype.hit = function(game, other) {
 		this.hit_self(game, other);
 	}
 };
+// default hit_plate implementation
+PlatedAsteroidEntity.prototype.hit_plate = function(game, other, ent) {
+	this.remove_entity(ent);
+};
+// default hit_self implementation
+PlatedAsteroidEntity.prototype.hit_self = function(game, other) {
+	Asteroid.prototype.hit.call(this, game, other);
+};
 
 function SuperMine(game, px, py, path) {
 	PlatedAsteroidEntity.call(this, game, px, py, path);
@@ -904,15 +912,23 @@ IcicleCarrier.prototype.hit_self = function(game, other) {
 
 
 function DodgingUFO(game, px, py, path) {
-	Asteroid.call(this, game, px, py, path);
-	this.image = game.images.ufo;
+	PlatedAsteroidEntity.call(this, game, px, py, path);
+	this.image = game.images.ufo_core;
 	this.width = 64;
 	this.height = 64;
+
+	for (var i = 0; i < 4; i++) {
+		var offset = point_offset(i * 90, 18);
+		var ent = new ScreenEntity(game, offset.px, offset.py, 32, 48, game.images.ufo_plate_chunk);
+		ent.angle = i * 90;
+		ent.collision_radius = 20;
+		this.sub_entities.push(ent);
+	}
 }
-DodgingUFO.prototype = Object.create(Asteroid.prototype);
+DodgingUFO.prototype = Object.create(PlatedAsteroidEntity.prototype);
 DodgingUFO.prototype.collision_radius = 32;
 DodgingUFO.prototype.update = function(game) {
-	Asteroid.prototype.update.call(this, game);
+	PlatedAsteroidEntity.prototype.update.call(this, game);
 	var self = this;
 
 
@@ -950,6 +966,31 @@ DodgingUFO.prototype.update = function(game) {
 			this.path[this.path_index - 1].sx = Math.cos(target_angle / 180 * Math.PI) * this.path[this.path_index - 1].speed;
 			this.path[this.path_index - 1].sy = Math.sin(target_angle / 180 * Math.PI) * this.path[this.path_index - 1].speed;
 		}
+	}
+};
+DodgingUFO.prototype.create_junk = function(game, ent) {
+	var offset = d2_point_offset(this.angle, ent.px, ent.py);
+	var p = { px: this.px + offset.px, py: this.py + offset.py };
+
+	var junk_ent = new WrappingPathEntity(game, p.px, p.py, ent.width, ent.height, ent.image, [{
+		timeout: 120,
+		sx: Math.random() * 10 - 5,
+		sy: Math.random() * 10 - 5,
+	}]);
+	junk_ent.disable_wrapping_first_time = false;
+	junk_ent.angle = ent.angle + this.angle;
+	junk_ent.rotation = Math.random() * 1 - 0.5;
+	game.add_entity(junk_ent);
+};
+DodgingUFO.prototype.hit_plate = function(game, other, ent) {
+	this.remove_entity(ent);
+	this.create_junk(game, ent);
+};
+DodgingUFO.prototype.hit_self = function(game, other) {
+	PlatedAsteroidEntity.prototype.hit_self.call(this, game, other);
+
+	for (var i = 0; i < this.sub_entities.length; i++) {
+		this.create_junk(game, this.sub_entities[i]);
 	}
 };
 
@@ -1599,6 +1640,8 @@ function main () {
 		missile: "missile.png",
 		explosive_missile: "explosive_missile.png",
 		ufo: "ufo.png",
+		ufo_core: "ufo_core.png",
+		ufo_plate_chunk: "ufo_plate_chunk.png",
 		asteroid_64: "asteroid_64.png",
 		explosive_charge: "explosive_charge.png",
 		explosion: "explosion.png",
@@ -1649,39 +1692,44 @@ function main () {
 		});
 
 		game.game_systems.npc_director = new NPCDirectorEntity(game, [
-			// { spawn_interval: 60, max_spawned: 5, max_spawned_to_end: 2, wave_spawn_count: 4, batches: [
-			// 	{ spawn_count: 1, enemy_type: MediumAsteroid, min_speed: 0.5, },
+			// // boring generic levels
+			// // { spawn_interval: 60, max_spawned: 5, max_spawned_to_end: 2, wave_spawn_count: 4, batches: [
+			// // 	{ spawn_count: 1, enemy_type: MediumAsteroid, min_speed: 0.5, },
+			// // ] },
+			// // { spawn_interval: 120, max_spawned: 2, wave_spawn_count: 3, batches: [
+			// // 	{ spawn_count: 2, enemy_type: IcicleCarrier, min_speed: 0.7, },
+			// // 	// { spawn_count: 1, enemy_type: ExplosiveMine, min_speed: 1, },
+			// // ] },
+			// { spawn_interval: 60, max_spawned: 8, max_spawned_to_end: 4, wave_spawn_count: 3, batches: [
+			// 	{ direction: 2, spawn_count: 2, enemy_type: MediumAsteroid, min_speed: 1, },
+			// 	{ direction: 2, spawn_count: 1, enemy_type: MediumSteelAsteroid, min_speed: 1, },
 			// ] },
-			{ spawn_interval: 120, max_spawned: 2, wave_spawn_count: 3, batches: [
-				{ spawn_count: 2, enemy_type: IcicleCarrier, min_speed: 0.7, },
-				// { spawn_count: 1, enemy_type: ExplosiveMine, min_speed: 1, },
-			] },
-			{ spawn_interval: 60, max_spawned: 1, wave_spawn_count: 3, batches: [
-				{ direction: 0, spawn_count: 4, enemy_type: DodgingUFO, min_speed: 2, max_speed: 2, },
-			] },
-			{ spawn_interval: 60, max_spawned: 8, max_spawned_to_end: 4, wave_spawn_count: 3, batches: [
-				{ direction: 2, spawn_count: 2, enemy_type: MediumAsteroid, min_speed: 1, },
-				{ direction: 2, spawn_count: 1, enemy_type: MediumSteelAsteroid, min_speed: 1, },
-			] },
-			// { spawn_interval: 60, wave_spawn_count: 1, max_spawned_to_end: 2, wave_tags: [ new EnableDarknessTag() ], batches: [
-			// 	{ spawn_count: 1, enemy_type: LargeAsteroid, max_speed: 2, },
+			// // { spawn_interval: 60, wave_spawn_count: 1, max_spawned_to_end: 2, wave_tags: [ new EnableDarknessTag() ], batches: [
+			// // 	{ spawn_count: 1, enemy_type: LargeAsteroid, max_speed: 2, },
+			// // ] },
+			// { spawn_interval: 120, max_spawned: 6, max_spawned_to_end: 6, wave_spawn_count: 2, wave_tags: [ new EnableDarknessTag() ], batches: [
+			// 	{ direction: 0, spawn_count: 4, enemy_type: SmallAsteroid, },
+			// 	{ direction: 1, spawn_count: 4, enemy_type: SmallAsteroid, },
+			// 	{ direction: 2, spawn_count: 4, enemy_type: SmallAsteroid, },
+			// 	{ direction: 3, spawn_count: 4, enemy_type: SmallAsteroid, },
+			// 	{ spawn_count: 1, enemy_type: MediumExplosivesAsteroid, min_speed: 1, },
 			// ] },
-			{ spawn_interval: 120, max_spawned: 6, max_spawned_to_end: 6, wave_spawn_count: 2, wave_tags: [ new EnableDarknessTag() ], batches: [
-				{ direction: 0, spawn_count: 4, enemy_type: SmallAsteroid, },
-				{ direction: 1, spawn_count: 4, enemy_type: SmallAsteroid, },
-				{ direction: 2, spawn_count: 4, enemy_type: SmallAsteroid, },
-				{ direction: 3, spawn_count: 4, enemy_type: SmallAsteroid, },
-				{ spawn_count: 1, enemy_type: MediumExplosivesAsteroid, min_speed: 1, },
-			] },
-			{ spawn_interval: 60, max_spawned: 4, wave_spawn_count: 2, batches: [
-				{ spawn_count: 1, enemy_type: LargeAsteroid, min_speed: 1, },
-				{ spawn_count: 4, enemy_type: MediumExplosivesAsteroid, min_speed: 1, },
-				{ spawn_count: 2, enemy_type: EMPMine, min_speed: 0.25, },
-			] },
-			{ spawn_interval: 120, max_spawned: 4, wave_spawn_count: 2, batches: [
-				{ spawn_count: 6, enemy_type: MediumSteelAsteroid, min_speed: 1, },
-				{ spawn_count: 4, enemy_type: ExplosiveMine, min_speed: 0.5, },
-			] },
+			// { spawn_interval: 60, max_spawned: 4, wave_spawn_count: 2, batches: [
+			// 	{ spawn_count: 1, enemy_type: LargeAsteroid, min_speed: 1, },
+			// 	{ spawn_count: 4, enemy_type: MediumExplosivesAsteroid, min_speed: 1, },
+			// 	{ spawn_count: 2, enemy_type: EMPMine, min_speed: 0.25, },
+			// ] },
+			// { spawn_interval: 120, max_spawned: 4, wave_spawn_count: 2, batches: [
+			// 	{ spawn_count: 6, enemy_type: MediumSteelAsteroid, min_speed: 1, },
+			// 	{ spawn_count: 4, enemy_type: ExplosiveMine, min_speed: 0.5, },
+			// ] },
+			// // { spawn_interval: 120, max_spawned: 4, wave_spawn_count: 4, wave_tags: [ new EnableDarknessTag() ], batches: [
+			// // 	{ spawn_count: 2, enemy_type: MediumSteelAsteroid, min_speed: 1.5, },
+			// // 	{ spawn_count: 2, enemy_type: MediumAsteroid, min_speed: 1, },
+			// // 	{ spawn_count: 2, enemy_type: ExplosiveMine, min_speed: 0.25, },
+			// // ] },
+
+			// challenge levels
 			{ spawn_interval: 120, max_spawned: 3, wave_spawn_count: 3, batches: [
 				{ spawn_count: 1, enemy_type: GiantSteelAsteroid, min_speed: 0.25, },
 			] },
@@ -1698,11 +1746,9 @@ function main () {
 				{ spawn_count: 2, enemy_type: IcicleCarrier, min_speed: 0.7, },
 				{ spawn_count: 1, enemy_type: ExplosiveMine, min_speed: 1, },
 			] },
-			// { spawn_interval: 120, max_spawned: 4, wave_spawn_count: 4, wave_tags: [ new EnableDarknessTag() ], batches: [
-			// 	{ spawn_count: 2, enemy_type: MediumSteelAsteroid, min_speed: 1.5, },
-			// 	{ spawn_count: 2, enemy_type: MediumAsteroid, min_speed: 1, },
-			// 	{ spawn_count: 2, enemy_type: ExplosiveMine, min_speed: 0.25, },
-			// ] },
+			{ spawn_interval: 60, max_spawned: 1, wave_spawn_count: 2, batches: [
+				{ direction: 0, spawn_count: 4, enemy_type: DodgingUFO, min_speed: 2, max_speed: 2, },
+			] },
 		]);
 
 		// game.particle_systems.gas_particles = new ParticleEffectSystem(game, { fill_style: '#202', particle_image: game.images.particle_steam, });
