@@ -1263,9 +1263,61 @@ UIP9Box.prototype.render = function() {
 	return buffer_canvas;
 };
 
-function UIMissileDisplay(game, px, py, bucket) {
+function UIRasterText(game, px, py, width_multiplier, height_multiplier, text, font_image) {
+	ScreenEntity.call(this, game, px, py, undefined, undefined, undefined);
+	this.angle_granularity = 1;
+
+	this.font_image = font_image;
+	this.font_width = this.font_image.width / 16;
+	this.font_height = this.font_image.height / 6;
+
+	this.width_multiplier = width_multiplier;
+	this.height_multiplier = height_multiplier;
+
+	this.ufo_image = game.images.ufo;
+	this.set_text(text);
+}
+UIRasterText.prototype = Object.create(ScreenEntity.prototype);
+UIRasterText.prototype.render_text = function(text) {
+	var text_characters = text.split('');
+
+	var buffer_canvas = document.createElement('canvas');
+	buffer_canvas.width = this.font_width * text_characters.length;
+	buffer_canvas.height = this.font_height;
+
+	var buffer_context = buffer_canvas.getContext('2d');
+	
+	buffer_context.globalCompositeOperation = '#source-over';
+
+	// buffer_context.drawImage(this.ufo_image, 0, 0);
+
+	for (var i = 0; i < text_characters.length; i++) {
+		buffer_context.save();
+		buffer_context.translate(i * this.font_width, 0);
+		this.render_character(buffer_context, text_characters[i]);
+		buffer_context.restore();
+	}
+
+	return buffer_canvas;
+};
+UIRasterText.prototype.render_character = function(buffer_context, character) {
+	var character_index = character.charCodeAt(0);
+	var x = character_index % 16;
+	var y = Math.floor(character_index / 16) - 2;
+	buffer_context.drawImage(this.font_image,
+		x * this.font_width, y * this.font_height, this.font_width, this.font_height,
+		0, 0, this.font_width, this.font_height);
+};
+UIRasterText.prototype.set_text = function(text) {
+	this.text = text;
+	this.image = this.render_text(this.text);
+	this.width = this.image.width * this.width_multiplier;
+	this.height = this.image.height * this.height_multiplier;
+};
+
+function UIMissileDisplay(game, px, py) {
 	UIP9Box.call(this, game, px, py, 12, 8, 8, 4, game.images.p9_green_ui);
-	this.bucket = bucket;
+	var bucket = game.query_entities(PlayerShip)[0];
 
 	this.missile_displays = [];
 	for (var i = 0; i < bucket.missile_max; i++) {
@@ -1290,20 +1342,23 @@ function UIMissileDisplay(game, px, py, bucket) {
 }
 UIMissileDisplay.prototype = Object.create(UIP9Box.prototype);
 UIMissileDisplay.prototype.update = function(game) {
-	var missile_max = this.bucket.missile_max;
+	var bucket = game.query_entities(PlayerShip)[0];
 
-	var missile_count = 0;
-	var explosive_missile_count = 0;
-	if (this.bucket.missile_armament === PlayerExplosiveMissile) {
-		explosive_missile_count = this.bucket.missile_count;
-	} else {
-		missile_count = this.bucket.missile_count;
-	}
-	for (var i = 0; i < missile_max; i++) {
-		this.missile_displays[i].visible = i < missile_count;
-	}
-	for (var i = 0; i < missile_max; i++) {
-		this.explosive_missile_displays[i].visible = i < explosive_missile_count;
+	if (bucket) {
+		var missile_max = bucket.missile_max;
+		var missile_count = 0;
+		var explosive_missile_count = 0;
+		if (bucket.missile_armament === PlayerExplosiveMissile) {
+			explosive_missile_count = bucket.missile_count;
+		} else {
+			missile_count = bucket.missile_count;
+		}
+		for (var i = 0; i < missile_max; i++) {
+			this.missile_displays[i].visible = i < missile_count;
+		}
+		for (var i = 0; i < missile_max; i++) {
+			this.explosive_missile_displays[i].visible = i < explosive_missile_count;
+		}
 	}
 };
 
@@ -1325,6 +1380,48 @@ UIWarningSign.prototype.update = function(game) {
 	}
 	this.visible = this.blink > 20;
 };
+
+
+
+function UIContinueMenu(game) {
+	ScreenEntity.call(this, game, game.canvas.width / 2, game.canvas.height / 2);
+	this.continue_countdown = 9;
+
+	this.countdown_text = new UIRasterText(game, 0, 0, 6, 6, "?", game.images.blockface_raster_font);
+
+	this.sub_entities.push(this.countdown_text);
+	this.sub_entities.push(
+		new UIRasterText(game, 0, - game.canvas.height / 4, 3, 3, "continue?", game.images.blockface_raster_font));
+	this.sub_entities.push(
+		new UIRasterText(game, 0, game.canvas.height / 4, 3, 3, "press Y", game.images.blockface_raster_font));
+}
+UIContinueMenu.prototype = Object.create(ScreenEntity.prototype);
+UIContinueMenu.prototype.update = function(game) {
+	Entity.prototype.update.call(this, game);
+
+	var player = game.query_entities(PlayerShip)[0];
+
+	if (!player) {
+		this.visible = true;
+		this.countdown_text.width /= 1.01;
+		this.countdown_text.height /= 1.01;
+		if (this.countdown_text.height < 5) {
+			this.continue_countdown--;
+			this.countdown_text.set_text("" + this.continue_countdown);
+		}
+
+		if (game.keystate.Y) {
+			game.add_entity(new PlayerShip(game, game.canvas.width / 2, game.canvas.height / 2));
+		}
+	} else if (this.visible) {
+		this.visible = false;
+		this.continue_countdown = 9;
+		this.countdown_text.set_text("" + this.continue_countdown);
+	}
+
+};
+
+
 
 function NPCDirectorEntity(game, waves) {
 	Entity.call(this, game);
@@ -1662,6 +1759,7 @@ function main () {
 		warning_sign: "warning_sign.png",
 		ui_missile: "ui_missile.png",
 		ui_explosive_missile: "ui_explosive_missile.png",
+		blockface_raster_font: "blockface_raster_font.png",
 	};
 
 	load_all_images(images, function () {
@@ -1756,42 +1854,16 @@ function main () {
 		// game.entities.push(game.creep_system);
 		// game.entities.push(game.building_system);
 		// // game.entities.push(new XHive(game, 16 * 5 + 48 / 2, 16 * 5 + 48 / 2));
-		var player_ship = new PlayerShip(game, 300, 300);
+		var player_ship = new PlayerShip(game, game.canvas.width / 2, game.canvas.height / 2);
 		game.entities.push(player_ship);
-		game.game_systems.ui_container.sub_entities.push(new UIMissileDisplay(game, 8 * 12 / 2 + 16, 480 - 4 * 8 / 2 - 16, player_ship));
+		game.game_systems.ui_container.sub_entities.push(
+			new UIMissileDisplay(game, 8 * 12 / 2 + 16, 480 - 4 * 8 / 2 - 16));
+		game.game_systems.ui_container.sub_entities.push(new UIContinueMenu(game));
+		// game.game_systems.ui_container.sub_entities.push(
+		// 	new UIRasterText(game, 100, 100, 2, 2, "hello world", game.images.blockface_raster_font));
 
 
-		// var asteroid = new SmallAsteroid(game, 800, 200,
-		// 	[ { angle: 180, speed: 0.75 + Math.random() * 0.25, }, ]);
-		// game.entities.push(asteroid);
-		// var entrance_position = asteroid_entrance(game, asteroid);
-		// if (entrance_position) {
-		// 	entrance_position = border_point(game, entrance_position, 16);
-		// 	game.entities.push(new UIWarningSign(game, entrance_position.px, entrance_position.py));
-		// }
-		// game.entities.push(new DebugEntity(game, player_ship));
 
-		// for (var i = 0; i < 5; i++) {
-		// 	var startx = -20;
-		// 	var starty = -20;
-		// 	var targetx = 32 + Math.random() * (640 - 32 * 2);
-		// 	var targety = 32 + Math.random() * (480 - 32 * 2);
-		// 	var angle = point_angle(startx, starty, targetx, targety);
-
-		// 	game.entities.push(new LargeAsteroid(game, startx, starty,
-		// 		[ { angle: angle, speed: 0.25 + Math.random() * 0.25, }, ]));
-		// }
-		// for (var i = 0; i < 10; i++) {
-		// 	var startx = -20;
-		// 	var starty = -20;
-		// 	var targetx = 32 + Math.random() * (640 - 32 * 2);
-		// 	var targety = 32 + Math.random() * (480 - 32 * 2);
-		// 	var angle = point_angle(startx, starty, targetx, targety);
-
-		// 	game.entities.push(new SmallAsteroid(game, startx, starty,
-		// 		[ { angle: angle, speed: 0.25 + Math.random() * 0.5, }, ]));
-		// }
-		// game.entities.push(new UIP9Box(game, 8 * 12 / 2 + 16, 480 - 4 * 8 / 2 - 16, 12, 8, 8, 4, game.images.p9_green_ui));
 
 		game.particle_systems.fire_particles = new ParticleEffectSystem(game, {
 			particle_image: game.images.particle_effect_generic,
