@@ -1,6 +1,6 @@
 # Asteroids
-Classic game of Asteroids but with a few twists. Runs in browser html5 canvas.
+Classic game of Asteroids but with a few twists. Runs in browser html5 canvas. Try it [here](https://mirror12k.github.io/fighter-down/)!
 
 screenshot:
 
-![GitHub Logo](screenshot.png)
+![screenshot](screenshot.png)
